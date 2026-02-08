@@ -190,7 +190,7 @@ AUDIT_MAX_ITERATIONS=3      # Max iterations for audit mode
 MONITOR_MAX_ITERATIONS=2    # Max iterations for monitor mode
 BASELINE_MAX_ITERATIONS=1   # Max iterations for baseline capture
 CLAUDE_MODEL="sonnet"       # Claude model to use
-MAX_TURNS=25                # Max tool-use turns per iteration
+MAX_BUDGET_USD="1.00"       # Spend cap per iteration (API key auth)
 ```
 
 ### Sandbox settings (`agent/conf/srt-settings.json`)
