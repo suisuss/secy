@@ -17,11 +17,9 @@ run() {
 
     local modules=(ports services packages users firewall sysctl cron setuid world)
     for mod in "${modules[@]}"; do
-        local mod_script="${SECY_ROOT}/lib/modules/${mod}.sh"
-        if [[ -f "$mod_script" ]]; then
+        if [[ -f "${SECY_ROOT}/lib/modules/${mod}.sh" ]]; then
             log_info "Running module: ${mod}"
-            source "$mod_script"
-            run "$@" 2>&1 || log_warn "Module '${mod}' exited with errors"
+            "${SECY_ROOT}/bin/secy" "$mod" "$@" 2>&1 || log_warn "Module '${mod}' exited with errors"
         fi
     done
 
