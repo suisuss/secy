@@ -19,7 +19,7 @@ run() {
     for mod in "${modules[@]}"; do
         if [[ -f "${SECY_ROOT}/lib/modules/${mod}.sh" ]]; then
             log_info "Running module: ${mod}"
-            "${SECY_ROOT}/bin/secy" "$mod" "$@" 2>&1 || log_warn "Module '${mod}' exited with errors"
+            "${SECY_ROOT}/bin/secy" "$mod" 2>&1 || log_warn "Module '${mod}' exited with errors"
         fi
     done
 
