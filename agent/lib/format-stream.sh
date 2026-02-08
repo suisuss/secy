@@ -2,95 +2,87 @@
 # format-stream.sh — Format Claude Code stream-json into readable stdout
 #
 # Reads JSON lines from stdin, extracts tool calls and text, prints a
-# human-readable activity log. Requires no dependencies beyond bash and
-# basic string ops (no jq needed in the container).
+# human-readable activity log. Uses jq when available, falls back to
+# bash regex (best-effort — may miss fields with escaped quotes or
+# reordered keys).
+
+# Detect jq availability once
+_has_jq=false
+command -v jq &>/dev/null && _has_jq=true
+
+# Extract a string field from a JSON line.
+# Usage: _json_field "fieldname" "$line"
+_json_field() {
+    local field="$1" line="$2"
+    if $_has_jq; then
+        echo "$line" | jq -r ".. | .${field}? // empty" 2>/dev/null | head -1
+    else
+        # Fallback: regex match (fragile with escaped quotes)
+        if [[ "$line" =~ \"${field}\":\"([^\"]+)\" ]]; then
+            echo "${BASH_REMATCH[1]}"
+        fi
+    fi
+}
+
+# Extract a numeric field from a JSON line.
+_json_num() {
+    local field="$1" line="$2"
+    if $_has_jq; then
+        echo "$line" | jq -r ".. | .${field}? // empty" 2>/dev/null | head -1
+    else
+        if [[ "$line" =~ \"${field}\":([0-9.]+) ]]; then
+            echo "${BASH_REMATCH[1]}"
+        fi
+    fi
+}
 
 while IFS= read -r line; do
     # Skip empty lines
     [[ -z "$line" ]] && continue
 
-    # Extract type field
-    type=""
-    if [[ "$line" =~ \"type\":\"([^\"]+)\" ]]; then
-        type="${BASH_REMATCH[1]}"
-    fi
+    type="$(_json_field "type" "$line")"
 
     case "$type" in
         system)
-            # Init message — show model
-            if [[ "$line" =~ \"model\":\"([^\"]+)\" ]]; then
-                echo "  [init] model=${BASH_REMATCH[1]}"
-            fi
+            model="$(_json_field "model" "$line")"
+            [[ -n "$model" ]] && echo "  [init] model=${model}"
             ;;
         assistant)
-            # Check for tool_use
-            if [[ "$line" =~ \"name\":\"([^\"]+)\" ]]; then
-                tool_name="${BASH_REMATCH[1]}"
-                # Extract relevant input based on tool
+            tool_name="$(_json_field "name" "$line")"
+            if [[ -n "$tool_name" ]]; then
                 case "$tool_name" in
-                    Read)
-                        if [[ "$line" =~ \"file_path\":\"([^\"]+)\" ]]; then
-                            echo "  [read] ${BASH_REMATCH[1]}"
-                        fi
-                        ;;
-                    Write)
-                        if [[ "$line" =~ \"file_path\":\"([^\"]+)\" ]]; then
-                            echo "  [write] ${BASH_REMATCH[1]}"
-                        fi
+                    Read|Write|Edit)
+                        fp="$(_json_field "file_path" "$line")"
+                        [[ -n "$fp" ]] && echo "  [${tool_name,,}] ${fp}"
                         ;;
                     Bash)
-                        if [[ "$line" =~ \"command\":\"([^\"]{1,120}) ]]; then
-                            cmd="${BASH_REMATCH[1]}"
-                            # Unescape basic JSON
+                        cmd="$(_json_field "command" "$line")"
+                        if [[ -n "$cmd" ]]; then
                             cmd="${cmd//\\n/ }"
-                            cmd="${cmd//\\\"/\"}"
-                            echo "  [bash] ${cmd}"
+                            echo "  [bash] ${cmd:0:120}"
                         fi
                         ;;
-                    Grep)
-                        if [[ "$line" =~ \"pattern\":\"([^\"]+)\" ]]; then
-                            echo "  [grep] ${BASH_REMATCH[1]}"
-                        fi
-                        ;;
-                    Glob)
-                        if [[ "$line" =~ \"pattern\":\"([^\"]+)\" ]]; then
-                            echo "  [glob] ${BASH_REMATCH[1]}"
-                        fi
-                        ;;
-                    Edit)
-                        if [[ "$line" =~ \"file_path\":\"([^\"]+)\" ]]; then
-                            echo "  [edit] ${BASH_REMATCH[1]}"
-                        fi
+                    Grep|Glob)
+                        pat="$(_json_field "pattern" "$line")"
+                        [[ -n "$pat" ]] && echo "  [${tool_name,,}] ${pat}"
                         ;;
                     *)
                         echo "  [${tool_name}]"
                         ;;
                 esac
-            elif [[ "$line" =~ \"text\":\"([^\"]{1,200}) ]]; then
-                # Assistant text (truncated for readability)
-                text="${BASH_REMATCH[1]}"
-                text="${text//\\n/ }"
-                # Only show if it looks like meaningful commentary, not just "I'll read..."
-                if [[ ${#text} -gt 20 ]]; then
+            else
+                text="$(_json_field "text" "$line")"
+                if [[ -n "$text" ]] && [[ ${#text} -gt 20 ]]; then
+                    text="${text//\\n/ }"
                     echo "  [text] ${text:0:120}..."
                 fi
             fi
             ;;
         result)
-            # Final result — show cost and duration
-            cost=""
-            duration=""
-            turns=""
-            if [[ "$line" =~ \"total_cost_usd\":([0-9.]+) ]]; then
-                cost="${BASH_REMATCH[1]}"
-            fi
-            if [[ "$line" =~ \"duration_ms\":([0-9]+) ]]; then
-                duration="${BASH_REMATCH[1]}"
-            fi
-            if [[ "$line" =~ \"num_turns\":([0-9]+) ]]; then
-                turns="${BASH_REMATCH[1]}"
-            fi
-            echo "  [done] ${turns} turns, ${duration}ms, \$${cost}"
+            cost="$(_json_num "total_cost_usd" "$line")"
+            duration="$(_json_num "duration_ms" "$line")"
+            turns="$(_json_num "num_turns" "$line")"
+            echo "  [done] ${turns:-?} turns, ${duration:-?}ms, \$${cost:-?}"
             ;;
     esac
 done
