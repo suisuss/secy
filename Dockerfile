@@ -13,6 +13,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     bubblewrap \
     socat \
     ripgrep \
+    jq \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Node.js (required for Claude Code CLI and srt)
