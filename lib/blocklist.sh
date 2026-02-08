@@ -69,10 +69,18 @@ _glob_to_regex() {
 
 # Check if a path matches any blocked pattern.
 # Returns 0 (true) if blocked, 1 (false) if allowed.
+# Strips a leading /host prefix so patterns written for bare paths
+# (e.g. /etc/shadow) also match /host/etc/shadow in Docker context.
 is_path_blocked() {
     local target="$1"
     local resolved
     resolved="$(_resolve_path "$target")"
+
+    # Normalize: strip /host prefix for matching (keep original for display)
+    local normalized="$resolved"
+    if [[ "$normalized" == /host/* ]]; then
+        normalized="${normalized#/host}"
+    fi
 
     local pattern
     while IFS= read -r pattern; do
@@ -81,7 +89,8 @@ is_path_blocked() {
         local regex
         regex="$(_glob_to_regex "$pattern")"
 
-        if [[ "$resolved" =~ $regex ]]; then
+        # Match against both the original resolved path and the normalized path
+        if [[ "$resolved" =~ $regex ]] || [[ "$normalized" =~ $regex ]]; then
             return 0
         fi
     done < <(_load_blocked_paths)
