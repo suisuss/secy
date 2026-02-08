@@ -41,20 +41,36 @@ _build_sed_file() {
     [[ -s "$sed_file" ]]
 }
 
+# Cached sed script path — built once per process, reused across calls.
+_REDACT_SED_FILE=""
+
+_ensure_sed_file() {
+    if [[ -n "$_REDACT_SED_FILE" ]] && [[ -s "$_REDACT_SED_FILE" ]]; then
+        return 0
+    fi
+    _REDACT_SED_FILE="$(mktemp /tmp/secy-redact.XXXXXX)"
+    if ! _build_sed_file "$_REDACT_SED_FILE"; then
+        rm -f "$_REDACT_SED_FILE"
+        _REDACT_SED_FILE=""
+        return 1
+    fi
+}
+
+# Cleanup is best-effort. The file is small and lives in /tmp.
+# Callers that need deterministic cleanup can call this explicitly.
+redact_cleanup() {
+    [[ -n "$_REDACT_SED_FILE" ]] && rm -f "$_REDACT_SED_FILE"
+    _REDACT_SED_FILE=""
+}
+
 # Pipe stdin through the redaction engine.
 # Usage: some_command | redact_output
 redact_output() {
-    local sed_file
-    sed_file="$(mktemp /tmp/secy-redact.XXXXXX)"
-    trap "rm -f '$sed_file'" RETURN
-
-    if ! _build_sed_file "$sed_file"; then
+    if ! _ensure_sed_file; then
         cat
         return
     fi
-
-    # Apply all patterns via sed script file
-    sed -Ef "$sed_file" 2>/dev/null || cat
+    sed -Ef "$_REDACT_SED_FILE" 2>/dev/null || cat
 }
 
 # Redact a string directly (not streaming)
