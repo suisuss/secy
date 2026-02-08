@@ -31,6 +31,41 @@ _resolve_path() {
     fi
 }
 
+# Convert a blocklist glob pattern to an ERE regex.
+# Handles ** (match any path), * (match within one segment), and ? (single char).
+_glob_to_regex() {
+    local glob="$1"
+    local regex=""
+    local i=0
+    local len=${#glob}
+
+    while (( i < len )); do
+        local c="${glob:$i:1}"
+        case "$c" in
+            '*')
+                if [[ "${glob:$((i+1)):1}" == '*' ]]; then
+                    # ** matches any path segment(s)
+                    regex+=".*"
+                    (( i += 2 ))
+                    # Skip trailing / after ** (e.g., **/)
+                    [[ "${glob:$i:1}" == '/' ]] && (( i++ ))
+                    continue
+                else
+                    # * matches within one path segment (no /)
+                    regex+="[^/]*"
+                fi
+                ;;
+            '?') regex+="[^/]" ;;
+            '.') regex+="\\." ;;
+            '/') regex+="/" ;;
+            *)   regex+="$c" ;;
+        esac
+        (( i++ ))
+    done
+
+    echo "^${regex}$"
+}
+
 # Check if a path matches any blocked pattern.
 # Returns 0 (true) if blocked, 1 (false) if allowed.
 is_path_blocked() {
@@ -42,15 +77,10 @@ is_path_blocked() {
     while IFS= read -r pattern; do
         [[ -z "$pattern" ]] && continue
 
-        # Check if the resolved path matches the glob pattern
-        # Use bash extended globbing for ** support
-        shopt -s extglob globstar nullglob 2>/dev/null || true
-        if [[ "$resolved" == $pattern ]]; then
-            return 0
-        fi
+        local regex
+        regex="$(_glob_to_regex "$pattern")"
 
-        # Also check with fnmatch-style matching
-        if [[ "$resolved" =~ ^${pattern//\*/.*}$ ]]; then
+        if [[ "$resolved" =~ $regex ]]; then
             return 0
         fi
     done < <(_load_blocked_paths)
