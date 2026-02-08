@@ -18,6 +18,15 @@ AKIA[0-9A-Z]{16}|||<AWS_KEY_REDACTED>
 (Bearer[[:space:]]+)[^[:space:]]+|||\1<REDACTED>
 (Authorization:[[:space:]]*)[^[:space:]]+|||\1<REDACTED>
 
+# JWT tokens (header.payload.signature, each part is base64url)
+eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}|||<JWT_REDACTED>
+
+# GitHub tokens (ghp_, gho_, ghu_, ghs_, ghr_)
+(ghp_|gho_|ghu_|ghs_|ghr_)[A-Za-z0-9_]{36,}|||<GITHUB_TOKEN_REDACTED>
+
+# Generic base64 secrets in key=value context (long base64 values after secret-like keys)
+(PRIVATE_KEY|private_key|SECRET_KEY|secret_key)[[:space:]]*[=:][[:space:]]*['"]?[A-Za-z0-9+/=]{40,}|||\1=<REDACTED>
+
 # Hash values from shadow-like entries
 \$[0-9a-z]\$[^[:space:]:]+|||\$<HASH_REDACTED>
 
