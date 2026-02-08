@@ -58,23 +58,28 @@ ensure_state_dirs() {
 # ── Lock management ───────────────────────────────────────────────
 
 acquire_lock() {
-    local lockfile="${STATE_DIR}/agent.lock"
-    if [[ -f "$lockfile" ]]; then
-        local pid
-        pid="$(cat "$lockfile")"
-        if kill -0 "$pid" 2>/dev/null; then
-            log_agent "ERROR: secy-agent already running (pid ${pid})"
-            exit 1
+    local lockdir="${STATE_DIR}/agent.lock"
+    # mkdir is atomic — if it succeeds, we own the lock
+    if ! mkdir "$lockdir" 2>/dev/null; then
+        local pidfile="${lockdir}/pid"
+        if [[ -f "$pidfile" ]]; then
+            local pid
+            pid="$(cat "$pidfile")"
+            if kill -0 "$pid" 2>/dev/null; then
+                log_agent "ERROR: secy-agent already running (pid ${pid})"
+                exit 1
+            fi
+            # Stale lock from crashed run
+            log_agent "Removing stale lock (pid ${pid} not running)"
         fi
-        # Stale lock from crashed run
-        log_agent "Removing stale lock (pid ${pid} not running)"
-        rm -f "$lockfile"
+        rm -rf "$lockdir"
+        mkdir "$lockdir" || { log_agent "ERROR: could not acquire lock"; exit 1; }
     fi
-    echo $$ > "$lockfile"
+    echo $$ > "${lockdir}/pid"
 }
 
 release_lock() {
-    rm -f "${STATE_DIR}/agent.lock"
+    rm -rf "${STATE_DIR}/agent.lock"
 }
 
 # ── Prompt assembly ───────────────────────────────────────────────
