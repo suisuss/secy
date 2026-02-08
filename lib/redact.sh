@@ -8,7 +8,8 @@ source "${SECY_ROOT}/lib/common.sh"
 
 # Build a sed script file from the redact_patterns config.
 # Each line in the config is: PATTERN|||REPLACEMENT
-# We use @ as the sed delimiter since it's unlikely to appear in patterns.
+# Delimiter: ASCII SOH (\x01) — cannot appear in text file content,
+# avoids collisions with ~ (home paths), @ (emails), / (paths).
 _build_sed_file() {
     local patterns_file="${SECY_CONF}/redact_patterns"
     local sed_file="$1"
@@ -19,6 +20,8 @@ _build_sed_file() {
     fi
 
     > "$sed_file"
+
+    local delim=$'\x01'
 
     while IFS= read -r line; do
         # Skip comments and blanks
@@ -31,8 +34,8 @@ _build_sed_file() {
 
         [[ -z "$pattern" ]] && continue
 
-        # Write as a sed command using ~ delimiter
-        echo "s~${pattern}~${replacement}~gi" >> "$sed_file"
+        # Write as a sed command using SOH delimiter
+        echo "s${delim}${pattern}${delim}${replacement}${delim}gi" >> "$sed_file"
     done < "$patterns_file"
 
     [[ -s "$sed_file" ]]
