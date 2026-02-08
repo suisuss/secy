@@ -3,7 +3,7 @@
 
 set -euo pipefail
 
-SECY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SECY_ROOT="${SECY_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
 SECY_CONF="${SECY_ROOT}/conf"
 SECY_LIB="${SECY_ROOT}/lib"
 
