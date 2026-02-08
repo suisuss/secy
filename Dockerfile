@@ -28,7 +28,7 @@ COPY bin/ /usr/local/lib/secy/bin/
 COPY lib/ /usr/local/lib/secy/lib/
 COPY conf/ /usr/local/lib/secy/conf/
 
-RUN sed 's|SECY_ROOT=.*|SECY_ROOT="/usr/local/lib/secy"|' \
+RUN sed 's|^SECY_ROOT=.*|SECY_ROOT="/usr/local/lib/secy"|' \
     /usr/local/lib/secy/bin/secy > /usr/local/bin/secy \
     && chmod 755 /usr/local/bin/secy
 

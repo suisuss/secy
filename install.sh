@@ -58,7 +58,7 @@ install() {
     chmod 644 "$INSTALL_LIB"/conf/*
 
     # Install the binary — rewrite SECY_ROOT to point to installed location
-    sed "s|SECY_ROOT=.*|SECY_ROOT=\"${INSTALL_LIB}\"|" "${SECY_ROOT}/bin/secy" > "$INSTALL_BIN"
+    sed "s|^SECY_ROOT=.*|SECY_ROOT=\"${INSTALL_LIB}\"|" "${SECY_ROOT}/bin/secy" > "$INSTALL_BIN"
     chown root:root "$INSTALL_BIN"
     chmod 755 "$INSTALL_BIN"
 
