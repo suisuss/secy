@@ -15,7 +15,7 @@ command -v jq &>/dev/null && _has_jq=true
 _json_field() {
     local field="$1" line="$2"
     if $_has_jq; then
-        echo "$line" | jq -r ".. | .${field}? // empty" 2>/dev/null | head -1
+        echo "$line" | jq -r "first(.. | .${field}? // empty)" 2>/dev/null
     else
         # Fallback: regex match (fragile with escaped quotes)
         if [[ "$line" =~ \"${field}\":\"([^\"]+)\" ]]; then
@@ -28,7 +28,7 @@ _json_field() {
 _json_num() {
     local field="$1" line="$2"
     if $_has_jq; then
-        echo "$line" | jq -r ".. | .${field}? // empty" 2>/dev/null | head -1
+        echo "$line" | jq -r "first(.. | .${field}? // empty)" 2>/dev/null
     else
         if [[ "$line" =~ \"${field}\":([0-9.]+) ]]; then
             echo "${BASH_REMATCH[1]}"
