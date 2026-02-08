@@ -35,7 +35,7 @@ RUN sed 's|^SECY_ROOT=.*|SECY_ROOT="/usr/local/lib/secy"|' \
 
 # Install agent
 COPY agent/ /opt/secy-agent/
-RUN chmod +x /opt/secy-agent/secy-agent.sh
+RUN chmod +x /opt/secy-agent/secy-agent.sh /opt/secy-agent/entrypoint.sh
 
 # srt settings — Anthropic sandbox-runtime configuration
 COPY agent/conf/srt-settings.json /root/.srt-settings.json
@@ -51,5 +51,5 @@ ENV IS_SANDBOX=1
 
 WORKDIR /opt/secy-agent
 
-ENTRYPOINT ["/opt/secy-agent/secy-agent.sh"]
+ENTRYPOINT ["/opt/secy-agent/entrypoint.sh"]
 CMD ["audit"]

@@ -16,7 +16,9 @@ services:
       - /:/host:ro
 
       # Claude Code OAuth credentials (for Pro/Max subscription auth)
-      - ${HOME}/.claude/.credentials.json:/root/.claude/.credentials.json:ro
+      # Staged to /mnt — entrypoint.sh copies into the /root/.claude tmpfs.
+      # Direct bind mount to /root/.claude/.credentials.json is shadowed by tmpfs.
+      - ${HOME}/.claude/.credentials.json:/mnt/claude-credentials.json:ro
 
     # ── Security layers (defense in depth) ────────────────────────
     #
@@ -31,6 +33,10 @@ services:
     #   - Filesystem: deny reads to shadow, SSH keys, credentials
     #   - enableWeakerNestedSandbox: true (Docker is the strong boundary)
 
+    # Immutable container filesystem — only volumes and tmpfs are writable.
+    # Prevents the agent from modifying secy config, blocklists, or its own prompt.
+    read_only: true
+
     cap_drop:
       - ALL
     cap_add:
@@ -43,6 +49,8 @@ services:
     tmpfs:
       - /tmp:size=64m
       - /root/.claude:size=64m
+      - /root/.npm:size=32m
+      - /root/.config:size=32m
 
     security_opt:
       - no-new-privileges:true
