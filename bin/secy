@@ -106,12 +106,23 @@ _show_capabilities() {
 
 # ── Audit logging ──────────────────────────────────────────────────
 
-SECY_LOG="${SECY_LOG:-/tmp/secy-audit.log}"
+# Prefer /var/log (installed), fall back to state dir, then /tmp
+if [[ -w /var/log/secy-audit.log ]]; then
+    SECY_LOG="${SECY_LOG:-/var/log/secy-audit.log}"
+elif [[ -n "${SECY_STATE_DIR:-}" ]] && [[ -d "${SECY_STATE_DIR}" ]]; then
+    SECY_LOG="${SECY_LOG:-${SECY_STATE_DIR}/secy-audit.log}"
+else
+    SECY_LOG="${SECY_LOG:-/tmp/secy-audit.log}"
+fi
 
 _audit_log() {
     local entry
     entry="$(date -Iseconds) uid=${EUID} sudo_user=${SUDO_USER:-none} module=$1 args=${*:2}"
     # Best-effort logging — don't fail if log dir isn't writable
+    # Rotate if log exceeds 1MB to avoid filling tmpfs
+    if [[ -f "$SECY_LOG" ]] && [[ "$(stat -c%s "$SECY_LOG" 2>/dev/null || echo 0)" -gt 1048576 ]]; then
+        mv "$SECY_LOG" "${SECY_LOG}.1" 2>/dev/null || true
+    fi
     echo "$entry" >> "$SECY_LOG" 2>/dev/null || true
 }
 
