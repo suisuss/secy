@@ -1,0 +1,49 @@
+services:
+  secy-agent:
+    build: .
+
+    environment:
+      - SECY_ROOT=/usr/local/lib/secy
+      - SECY_STATE_DIR=/var/lib/secy-agent/state
+      # Uncomment for API key auth (pay-per-use) instead of OAuth
+      # - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+
+    volumes:
+      # Persist findings across container runs
+      - ./state:/var/lib/secy-agent/state
+
+      # Host filesystem mounted read-only at /host
+      - /:/host:ro
+
+      # Claude Code OAuth credentials (for Pro/Max subscription auth)
+      - ${HOME}/.claude/.credentials.json:/root/.claude/.credentials.json:ro
+
+    # ── Security layers (defense in depth) ────────────────────────
+    #
+    # Layer 1: Docker container
+    #   - Host filesystem is read-only (/host:ro)
+    #   - Container runs as root (needed for full host file access)
+    #   - IS_SANDBOX=1 tells Claude Code it's in a managed sandbox
+    #   - Writes only to state volume and tmpfs
+    #
+    # Layer 2: Anthropic sandbox-runtime (srt) — if bwrap works in container
+    #   - Network: only api.anthropic.com (no data exfiltration)
+    #   - Filesystem: deny reads to shadow, SSH keys, credentials
+    #   - enableWeakerNestedSandbox: true (Docker is the strong boundary)
+
+    cap_drop:
+      - ALL
+    cap_add:
+      # Read all files on the host regardless of ownership
+      - DAC_READ_SEARCH
+      # Required by bubblewrap (srt sandbox on Linux) — may not work in all Docker setups
+      - SYS_ADMIN
+      - NET_ADMIN
+
+    tmpfs:
+      - /tmp:size=64m
+      - /root/.claude:size=64m
+
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=unconfined

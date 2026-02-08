@@ -1,0 +1,47 @@
+# MIME types that secy is allowed to read content from.
+# Anything NOT matching these prefixes is blocked.
+# This is a whitelist — unlisted types are rejected.
+#
+# Check a file's type with: file --mime-type -b <path>
+
+# Plain text and config files
+text/plain
+text/x-shellscript
+text/x-script.python
+text/x-python
+text/x-c
+text/x-c++
+text/x-java
+text/x-perl
+text/x-ruby
+text/x-php
+text/x-lisp
+text/x-lua
+text/x-diff
+text/x-makefile
+text/x-msdos-batch
+text/html
+text/css
+text/csv
+text/xml
+text/x-asm
+
+# Structured data
+application/json
+application/xml
+application/x-yaml
+application/yaml
+application/toml
+application/javascript
+application/x-httpd-php
+application/x-shellscript
+application/x-perl
+application/x-ruby
+application/x-python
+
+# Config-like types that file(1) sometimes reports
+application/x-setupscript
+application/x-wine-extension-ini
+
+# Empty files
+inode/x-empty

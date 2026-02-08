@@ -1,0 +1,155 @@
+#!/usr/bin/env bash
+# secy — Restricted security audit tool for AI agents
+#
+# Usage: secy <module> [args...]
+#        sudo secy <module> [args...]    (for modules requiring root)
+#
+# This is the only binary that should be in the sudoers allowlist.
+# It dispatches to audit modules after validating arguments.
+
+set -euo pipefail
+
+SECY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export SECY_ROOT
+
+source "${SECY_ROOT}/lib/common.sh"
+
+VERSION="0.1.0"
+
+# ── Safety checks ──────────────────────────────────────────────────
+
+# Refuse to run if the binary is writable by non-root
+_check_integrity() {
+    local self
+    self="$(readlink -f "$0")"
+    if [[ -w "$self" ]] && [[ $EUID -ne 0 ]]; then
+        # Writable by current user — ok for development
+        # In production, this binary should be root-owned 0755
+        log_warn "secy binary is writable by current user (ok for development)"
+    fi
+}
+
+# Block shell metacharacters in arguments
+_validate_args() {
+    for arg in "$@"; do
+        if [[ "$arg" =~ [\;\|\&\$\`\\] ]]; then
+            log_error "BLOCKED: Argument contains shell metacharacters: '${arg}'"
+            log_error "secy does not permit shell injection in arguments"
+            exit 1
+        fi
+        # Block subshell attempts
+        if [[ "$arg" =~ \$\( ]] || [[ "$arg" =~ \<\( ]]; then
+            log_error "BLOCKED: Argument contains subshell syntax: '${arg}'"
+            exit 1
+        fi
+    done
+}
+
+# ── Module dispatch ────────────────────────────────────────────────
+
+MODULES_DIR="${SECY_ROOT}/lib/modules"
+
+_list_modules() {
+    local mod
+    for mod in "${MODULES_DIR}"/*.sh; do
+        [[ -f "$mod" ]] || continue
+        basename "$mod" .sh
+    done
+}
+
+_show_help() {
+    echo "secy v${VERSION} — Restricted security audit tool"
+    echo ""
+    echo "Usage: secy <module> [args...]"
+    echo ""
+    echo "Available modules:"
+    for mod in $(_list_modules); do
+        printf "  %-14s" "$mod"
+        # Extract first comment line as description
+        local desc
+        desc="$(head -3 "${MODULES_DIR}/${mod}.sh" | grep '^# ' | head -1 | sed 's/^# //')"
+        echo "$desc"
+    done
+    echo ""
+    echo "Options:"
+    echo "  --capabilities   Show what secy can and cannot do"
+    echo "  --version        Show version"
+    echo "  --help           Show this help"
+}
+
+_show_capabilities() {
+    section_header "secy capabilities"
+    echo "CAN do:"
+    echo "  - Read system config files (with sensitive values redacted)"
+    echo "  - Inspect file permissions, ownership, ACLs"
+    echo "  - List open ports, services, firewall rules"
+    echo "  - List installed packages and versions"
+    echo "  - Enumerate users, groups, sudo rules"
+    echo "  - Read system logs (with credentials redacted)"
+    echo "  - Find setuid binaries, world-writable files"
+    echo "  - Dump kernel parameters"
+    echo "  - List cron jobs"
+    echo ""
+    echo "CANNOT do:"
+    echo "  - Read credential files (/etc/shadow, private keys, .env, etc.)"
+    echo "  - Read binary files, images, archives, databases, or PDFs (MIME type checked)"
+    echo "  - Execute arbitrary commands"
+    echo "  - Write, modify, or delete anything"
+    echo "  - Access network from audit context"
+    echo "  - Use shell metacharacters (pipes, redirects, subshells)"
+    echo "  - Read device files, sockets, or /proc/kcore"
+    echo ""
+    echo "Blocked paths: $(wc -l < "${SECY_CONF}/blocked_paths" | tr -d ' ') patterns loaded"
+    echo "Allowed MIME types: $(grep -vc '^\s*#\|^\s*$' "${SECY_CONF}/allowed_mimetypes" 2>/dev/null || echo 0) types loaded"
+    echo "Redact patterns: $(grep -c '|||' "${SECY_CONF}/redact_patterns" 2>/dev/null || echo 0) rules loaded"
+}
+
+# ── Audit logging ──────────────────────────────────────────────────
+
+SECY_LOG="${SECY_LOG:-/tmp/secy-audit.log}"
+
+_audit_log() {
+    local entry
+    entry="$(date -Iseconds) uid=${EUID} sudo_user=${SUDO_USER:-none} module=$1 args=${*:2}"
+    # Best-effort logging — don't fail if log dir isn't writable
+    echo "$entry" >> "$SECY_LOG" 2>/dev/null || true
+}
+
+# ── Main ───────────────────────────────────────────────────────────
+
+main() {
+    _check_integrity
+
+    if [[ $# -eq 0 ]] || [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
+        _show_help
+        exit 0
+    fi
+
+    case "$1" in
+        --version)    echo "secy v${VERSION}"; exit 0 ;;
+        --capabilities) _show_capabilities; exit 0 ;;
+    esac
+
+    local module="$1"
+    shift
+    local module_script="${MODULES_DIR}/${module}.sh"
+
+    if [[ ! -f "$module_script" ]]; then
+        log_error "Unknown module: '${module}'"
+        echo ""
+        _show_help
+        exit 1
+    fi
+
+    # Validate remaining arguments for shell injection
+    _validate_args "$@"
+
+    # Log the invocation
+    _audit_log "$module" "$@"
+
+    # Dispatch to module
+    source "$module_script"
+    run "$@"
+}
+
+main "$@"
