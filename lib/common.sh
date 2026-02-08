@@ -50,3 +50,13 @@ require_cmd() {
         exit 1
     fi
 }
+
+# Warn if running inside the Docker agent container where host commands
+# show container state, not host state.  Modules that rely on commands
+# like ss, systemctl, iptables, or sysctl should call this.
+warn_if_container() {
+    if [[ -d "/host/etc" ]]; then
+        log_warn "Running inside container — this module shows CONTAINER state, not host."
+        log_warn "For host state, read files under /host/ directly (see AGENT.md)."
+    fi
+}

@@ -2,6 +2,8 @@
 # Usage: secy ports [--all]
 
 run() {
+    warn_if_container
+
     local show_all=false
     [[ "${1:-}" == "--all" ]] && show_all=true
 

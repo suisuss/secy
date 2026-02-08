@@ -3,6 +3,7 @@
 
 run() {
     require_root
+    warn_if_container
 
     section_header "FIREWALL RULES"
 

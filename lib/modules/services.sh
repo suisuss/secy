@@ -2,6 +2,8 @@
 # Usage: secy services [--failed]
 
 run() {
+    warn_if_container
+
     local filter=""
     [[ "${1:-}" == "--failed" ]] && filter="--state=failed"
 

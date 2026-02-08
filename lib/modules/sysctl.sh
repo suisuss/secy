@@ -2,6 +2,8 @@
 # Usage: secy sysctl [--security]
 
 run() {
+    warn_if_container
+
     local security_only=false
     [[ "${1:-}" == "--security" ]] && security_only=true
 
