@@ -109,7 +109,8 @@ run_agent() {
             --max-budget-usd "$MAX_BUDGET_USD" \
             --tools "$ALLOWED_TOOLS" \
             --system-prompt "$system_prompt" \
-            -p "$prompt" 2>&1 \
+            -p "$prompt" \
+            2> >(cat >&2) \
             | tee >(bash "$stream_formatter" >&2)) || true
 
         if check_completion "$output"; then
