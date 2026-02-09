@@ -27,26 +27,100 @@ The agent reads host state directly from files — `/proc/net/tcp` for open port
 
 For config files that may contain secrets, the agent uses `sread` — a restricted audit tool with blocklist enforcement and output redaction.
 
-## Quick start
+## Setup
+
+### Prerequisites
+
+- Docker and Docker Compose
+- One of:
+  - **Claude Code OAuth** (Pro/Max subscription) — `claude` CLI authenticated on the host
+  - **Anthropic API key** (pay-per-use)
+
+### Build
 
 ```bash
-# Clone
 git clone https://github.com/suisuss/secy.git && cd secy
-
-# Build the container
 docker compose build
+```
 
-# Run a security audit
-ANTHROPIC_API_KEY=sk-... docker compose run secy audit
+### Authentication
 
-# Capture a baseline (for change detection)
-ANTHROPIC_API_KEY=sk-... docker compose run secy baseline
+**Option A: OAuth (Pro/Max subscription)**
 
-# Monitor for changes against baseline
-ANTHROPIC_API_KEY=sk-... docker compose run secy monitor
+If you've already authenticated with `claude` on the host, credentials are at `~/.claude/.credentials.json`. The container mounts this automatically — no extra config needed.
+
+**Option B: API key**
+
+Uncomment the `ANTHROPIC_API_KEY` line in `docker-compose.yml` and set the key:
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+docker compose run secy audit
+```
+
+Or pass it inline:
+
+```bash
+ANTHROPIC_API_KEY=sk-ant-... docker compose run secy audit
+```
+
+## Run
+
+```bash
+# Full security audit
+docker compose run secy audit
+
+# Capture a baseline first (for change detection later)
+docker compose run secy baseline
+
+# Compare current state against baseline
+docker compose run secy monitor
+
+# Clean up orphan containers from previous runs
+docker compose run --remove-orphans secy audit
 ```
 
 Findings are written to `./state/findings/` on the host.
+
+### What to expect
+
+The agent streams its activity as it works:
+
+```
+[secy 2026-02-09T00:24:06+00:00] Starting audit (max 3 iterations)
+[secy 2026-02-09T00:24:06+00:00] Iteration 1/3
+  [init] model=claude-sonnet-4-5-20250929
+  [read] /host/proc/net/tcp
+  [read] /host/etc/passwd
+  [bash] find /host -perm -4000 -type f 2>/dev/null
+  [read] /host/etc/ssh/sshd_config
+  [write] /var/lib/secy/state/findings/audit-2026-02-09-002406.md
+  [done] 12 turns, 45230ms, $0.42
+```
+
+A baseline run takes ~2–4 minutes. An audit takes ~5–10 minutes across up to 3 iterations.
+
+### Troubleshooting
+
+**No output from Claude (exits immediately):**
+Check `/root/.claude/debug/latest` inside the container for the actual error:
+
+```bash
+docker compose run --entrypoint bash secy -c '
+cp /opt/secy/conf/srt-settings.json /root/.srt-settings.json
+if [ -f /mnt/claude-credentials.json ]; then
+    mkdir -p /root/.claude
+    cp /mnt/claude-credentials.json /root/.claude/.credentials.json
+fi
+claude --print -p "say hello" 2>&1
+echo "exit: $?"
+cat /root/.claude/debug/latest 2>/dev/null
+'
+```
+
+**"Not logged in" error:** OAuth credentials aren't being found. Check that `~/.claude/.credentials.json` exists on the host. If using `--entrypoint bash`, you must manually copy credentials (the entrypoint is bypassed).
+
+**srt sandbox fails:** Expected in most Docker setups. The agent falls back to running without srt — Docker is the primary sandbox boundary.
 
 ## Modes
 
@@ -200,11 +274,6 @@ Network and filesystem restrictions enforced by Anthropic's sandbox-runtime. See
 ### sread settings (`conf/`)
 
 Blocklist patterns, redaction regexes, and MIME type whitelist. Edit these to tune what the agent can and cannot read through sread.
-
-## Requirements
-
-- Docker and Docker Compose
-- An Anthropic API key (`ANTHROPIC_API_KEY`)
 
 ## Status
 
