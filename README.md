@@ -191,19 +191,21 @@ secy/
 │   └── lib/
 │       ├── agent-common.sh        # Lock, preflight, prompt assembly
 │       └── format-stream.sh       # Stream-JSON formatter for activity log
-├── bin/
-│   └── sread                      # Restricted read tool (blocklist + redaction)
-├── lib/
-│   ├── common.sh                  # Shared utilities
-│   ├── redact.sh                  # Output redaction engine
-│   ├── blocklist.sh               # Path blocking, MIME checking
-│   └── modules/                   # Audit modules (files, ports, users, ...)
-├── conf/
-│   ├── blocked_paths              # Credential file patterns
-│   ├── allowed_mimetypes          # MIME type whitelist
-│   ├── redact_patterns            # Output redaction regexes
-│   └── sread.sudoers              # sudoers drop-in (for non-Docker use)
-├── tests/                         # Unit + integration tests
+├── sread/                             # Restricted read tool (blocklist + redaction)
+│   ├── bin/
+│   │   └── sread                      # Main binary
+│   ├── lib/
+│   │   ├── common.sh                  # Shared utilities
+│   │   ├── redact.sh                  # Output redaction engine
+│   │   ├── blocklist.sh              # Path blocking, MIME checking
+│   │   └── modules/                   # Audit modules (files, ports, users, ...)
+│   ├── conf/
+│   │   ├── blocked_paths              # Credential file patterns
+│   │   ├── allowed_mimetypes          # MIME type whitelist
+│   │   ├── redact_patterns            # Output redaction regexes
+│   │   └── sread.sudoers              # sudoers drop-in (for non-Docker use)
+│   ├── tests/                         # Unit + integration tests
+│   └── install.sh                     # sread standalone install
 ├── docs/
 │   ├── DESIGN.md                  # sread threat model
 │   ├── sandboxing.md              # Security architecture
@@ -216,7 +218,6 @@ secy/
 │   └── findings/                  # Timestamped reports
 ├── Dockerfile
 ├── docker-compose.yml
-├── install.sh                     # sread standalone install
 └── .gitignore
 ```
 
@@ -253,9 +254,9 @@ MAX_BUDGET_USD="1.00"       # Spend cap per iteration
 
 Network and filesystem restrictions enforced by Anthropic's sandbox-runtime. See [docs/sandboxing.md](docs/sandboxing.md).
 
-### sread settings (`conf/`)
+### sread settings (`sread/conf/`)
 
-sread is a restricted read tool the agent can use for config files that may contain secrets. It enforces a path blocklist, redacts sensitive values in output, and rejects non-text files. Edit `conf/blocked_paths`, `conf/redact_patterns`, and `conf/allowed_mimetypes` to tune its behavior. Run `sread --help` for available modules.
+sread is a restricted read tool the agent can use for config files that may contain secrets. It enforces a path blocklist, redacts sensitive values in output, and rejects non-text files. Edit `sread/conf/blocked_paths`, `sread/conf/redact_patterns`, and `sread/conf/allowed_mimetypes` to tune its behavior. Run `sread --help` for available modules.
 
 ## Status
 

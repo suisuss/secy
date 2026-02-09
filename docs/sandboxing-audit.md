@@ -217,9 +217,9 @@ The entire agent loop depends on `--dangerously-skip-permissions`. `IS_SANDBOX=1
 
 | # | Finding | File |
 |---|---------|------|
-| 10 | Stale delimiter comment in `redact_patterns` | `conf/redact_patterns:4` |
-| 11 | Newline not blocked in sread argument validation | `bin/sread:35` |
-| 12 | Audit log falls back to tmpfs, lost on restart | `bin/sread:115` |
+| 10 | Stale delimiter comment in `redact_patterns` | `sread/conf/redact_patterns:4` |
+| 11 | Newline not blocked in sread argument validation | `sread/bin/sread:35` |
+| 12 | Audit log falls back to tmpfs, lost on restart | `sread/bin/sread:115` |
 
 ### Operational notes
 

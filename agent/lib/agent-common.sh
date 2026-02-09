@@ -6,7 +6,7 @@ set -euo pipefail
 AGENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 # SREAD_ROOT can be set externally (e.g. in Docker where agent and sread are separate)
 if [[ -z "${SREAD_ROOT:-}" ]]; then
-    SREAD_ROOT="$(cd "${AGENT_DIR}/.." && pwd)"
+    SREAD_ROOT="$(cd "${AGENT_DIR}/../sread" && pwd)"
 fi
 export SREAD_ROOT
 

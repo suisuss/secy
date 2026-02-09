@@ -5,7 +5,7 @@ FROM node:22-bookworm-slim AS build
 RUN npm install -g @anthropic-ai/claude-code @anthropic-ai/sandbox-runtime
 
 # Prepare sread binary (patch root path for container layout)
-COPY bin/ /tmp/sread-src/bin/
+COPY sread/bin/ /tmp/sread-src/bin/
 RUN sed 's|^SREAD_ROOT=.*|SREAD_ROOT="/usr/local/lib/sread"|' \
     /tmp/sread-src/bin/sread > /tmp/sread-bin \
     && chmod 755 /tmp/sread-bin
@@ -33,9 +33,9 @@ COPY --from=build /usr/local/bin /usr/local/bin
 COPY --from=build /usr/local/lib/node_modules /usr/local/lib/node_modules
 
 # Install sread (used for redacted reads of config files with secrets)
-COPY bin/ /usr/local/lib/sread/bin/
-COPY lib/ /usr/local/lib/sread/lib/
-COPY conf/ /usr/local/lib/sread/conf/
+COPY sread/bin/ /usr/local/lib/sread/bin/
+COPY sread/lib/ /usr/local/lib/sread/lib/
+COPY sread/conf/ /usr/local/lib/sread/conf/
 COPY --from=build /tmp/sread-bin /usr/local/bin/sread
 
 # Install agent

@@ -103,7 +103,7 @@ assert_path_allowed() {
     local target="$1"
     if is_path_blocked "$target"; then
         log_error "BLOCKED: Access to '${target}' is not permitted"
-        log_error "This path matches a blocked pattern in conf/blocked_paths"
+        log_error "This path matches a blocked pattern in sread/conf/blocked_paths"
         exit 1
     fi
 }
@@ -175,7 +175,7 @@ assert_mimetype_allowed() {
         log_error "BLOCKED: MIME type '${mime}' is not allowed for reading"
         log_error "File: ${target}"
         log_error "sread only reads text and config files — not binaries, images, archives, or databases"
-        log_error "Allowed types are listed in conf/allowed_mimetypes"
+        log_error "Allowed types are listed in sread/conf/allowed_mimetypes"
         exit 1
     fi
 }
