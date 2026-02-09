@@ -13,7 +13,7 @@
 | Control | Documented | Actual |
 |---------|-----------|--------|
 | Host filesystem | `/:/host:ro` | Correct — read-only mount |
-| Container filesystem | `read_only: true` — immutable | Correct — immutable. tmpfs for `/tmp`, `/root/.claude`, `/root/.npm`, `/root/.config`. |
+| Container filesystem | `read_only: true` — immutable | Correct — immutable. tmpfs for `/tmp` and `/root`. |
 | Capabilities | `cap_drop: ALL`, add `DAC_READ_SEARCH` + `SYS_ADMIN` | Correct, but `SYS_ADMIN` is overly broad |
 | Seccomp | Not documented | `seccomp=unconfined` — all syscall filtering disabled |
 | Privilege escalation | `no-new-privileges: true` | Correct |
@@ -21,7 +21,7 @@
 ### Findings
 
 **[RESOLVED] `read_only: true` was missing from `docker-compose.yml`.**
-Fixed in `a6c2591`. `docker-compose.yml` now sets `read_only: true`. Only tmpfs mounts (`/tmp`, `/root/.claude`, `/root/.npm`, `/root/.config`) and the state volume are writable. The agent cannot modify sread config, blocklists, or its own prompt.
+Fixed in `a6c2591`. `docker-compose.yml` now sets `read_only: true`. Only tmpfs mounts (`/tmp`, `/root`) and the state volume are writable. The agent cannot modify sread config, blocklists, or its own prompt.
 
 ~~Impact: A prompt-injected agent can:~~
 ~~- Overwrite `/usr/local/lib/sread/conf/blocked_paths` to empty the blocklist~~
@@ -44,13 +44,16 @@ The comment says `SYS_ADMIN` is "Required by bubblewrap (srt sandbox on Linux)."
 Can modify iptables rules within the container's network namespace, potentially interfering with srt's network filtering if srt uses iptables-based enforcement. Can also manipulate routing tables and network interfaces.
 
 **[RESOLVED] OAuth credential bind mount was shadowed by tmpfs.**
-Fixed in `a6c2591`. Credentials are now staged at `/mnt/claude-credentials.json` (bind mount) and copied into the `/root/.claude` tmpfs by `entrypoint.sh` before the agent starts. Both OAuth and API key auth now function.
+Fixed in `a6c2591`, refined in `a4e6e16`. Credentials are staged at `/mnt/claude-credentials.json` (bind mount) and copied into the `/root` tmpfs by `entrypoint.sh`. srt settings are staged at `/opt/secy/conf/srt-settings.json` and also copied into `/root` by the entrypoint. Both OAuth and API key auth function.
 
 ~~The tmpfs at `/root/.claude` shadows the bind mount at `/root/.claude/.credentials.json`. OAuth authentication cannot work — the credential file is invisible inside the container. Only API key auth functions.~~
 
+**[RESOLVED] Claude Code failed silently in read-only container.**
+Fixed in `a4e6e16`. Claude Code writes `/root/.claude.json` (a config file) at startup. The previous per-directory tmpfs mounts (`/root/.claude`, `/root/.npm`, `/root/.config`) didn't cover this file since it lives at `/root/` level. Claude exited 0 with zero output — the error was only visible in `/root/.claude/debug/`. Fix: single tmpfs on `/root`, entrypoint stages all needed files from immutable paths.
+
 ### Layer 1 verdict
 
-Two strong controls (`:ro` host mount, `read_only: true` container filesystem). `SYS_ADMIN` + `seccomp=unconfined` remain overly broad — the tradeoff for enabling srt inside Docker is real. OAuth credential staging resolves the authentication gap.
+Two strong controls (`:ro` host mount, `read_only: true` container filesystem). `/root` is a single tmpfs — simpler and covers all files Claude Code needs to write (`.claude.json`, `.claude/`, `.npm/`, `.config/`). `SYS_ADMIN` + `seccomp=unconfined` remain overly broad — the tradeoff for enabling srt inside Docker is real. OAuth credential staging and `/root` tmpfs resolve the authentication and startup gaps.
 
 ---
 
@@ -191,13 +194,14 @@ The entire agent loop depends on `--dangerously-skip-permissions`. `IS_SANDBOX=1
 |---|---------|--------|
 | 1 | ~~`read_only: true` missing~~ | Resolved in `a6c2591` |
 | 2 | ~~OAuth credential bind mount shadowed by tmpfs~~ | Resolved in `a6c2591` |
+| 13 | ~~Claude Code silent failure — `/root/.claude.json` blocked by read-only fs~~ | Resolved in `a4e6e16` |
 
 ### High
 
 | # | Finding | File |
 |---|---------|------|
 | 3 | `SYS_ADMIN` + `seccomp=unconfined` overly broad | `docker-compose.yml:40-41,49` |
-| 4 | srt is best-effort, silently degrades to nothing | `agent/secy.sh:89-98` |
+| 4 | srt is best-effort, silently degrades to nothing | `agent/secy.sh:89-98, agent/secy.sh:103-115` |
 | 5 | sread is opt-in — agent reads files directly, bypassing blocklist/redaction | `agent/AGENT.md` |
 
 ### Medium
@@ -206,8 +210,8 @@ The entire agent loop depends on `--dangerously-skip-permissions`. `IS_SANDBOX=1
 |---|---------|------|
 | 6 | srt `denyRead` only covers root's credentials | `agent/conf/srt-settings.json` |
 | 7 | No verification that srt enforcement is actually active | `agent/secy.sh:90` |
-| 8 | `NET_ADMIN` capability enables network stack manipulation | `docker-compose.yml:42` |
-| 9 | State volume is writable channel from container to host | `docker-compose.yml:13` |
+| 8 | `NET_ADMIN` capability enables network stack manipulation | `docker-compose.yml:44` |
+| 9 | State volume is writable channel from container to host | `docker-compose.yml:14` |
 
 ### Low
 
@@ -216,6 +220,11 @@ The entire agent loop depends on `--dangerously-skip-permissions`. `IS_SANDBOX=1
 | 10 | Stale delimiter comment in `redact_patterns` | `conf/redact_patterns:4` |
 | 11 | Newline not blocked in sread argument validation | `bin/sread:35` |
 | 12 | Audit log falls back to tmpfs, lost on restart | `bin/sread:115` |
+
+### Operational notes
+
+- **Debug output location:** Claude Code writes debug logs to `/root/.claude/debug/` (on the tmpfs). When Claude exits 0 with no output, check the `latest` symlink there for the actual error. This was how the `/root/.claude.json` EROFS failure was diagnosed.
+- **Output pipeline:** The agent's output pipeline uses `tee file | formatter >&2` (simple pipeline) rather than process substitutions inside command substitutions, which are unreliable for real-time output in bash.
 
 ### What's done well
 
