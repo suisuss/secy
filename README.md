@@ -209,7 +209,8 @@ secy/
 │   │   ├── agent.conf             # Iteration limits, model, settings
 │   │   └── srt-settings.json     # Anthropic sandbox-runtime config
 │   └── lib/
-│       └── agent-common.sh        # Lock, preflight, prompt assembly
+│       ├── agent-common.sh        # Lock, preflight, prompt assembly
+│       └── format-stream.sh       # Stream-JSON formatter for activity log
 ├── bin/
 │   └── sread                      # sread entrypoint
 ├── lib/
@@ -224,7 +225,9 @@ secy/
 │   └── redact_patterns            # Output redaction regexes
 ├── tests/                         # Unit + integration tests
 ├── docs/
+│   ├── DESIGN.md                  # sread threat model
 │   ├── sandboxing.md              # Security architecture
+│   ├── sandboxing-audit.md        # Sandboxing audit findings
 │   ├── shift.md                   # Design decisions
 │   └── ai-agent-landscape.md     # Analysis of Ralph, OpenClaw
 ├── state/                         # Runtime (gitignored)
@@ -234,7 +237,6 @@ secy/
 ├── Dockerfile
 ├── docker-compose.yml
 ├── install.sh                     # sread standalone install
-├── DESIGN.md                      # sread threat model
 └── .gitignore
 ```
 
@@ -244,7 +246,7 @@ secy uses the [Ralph pattern](docs/ai-agent-landscape.md#ralph): a bash loop tha
 
 Each iteration:
 1. Assembles a prompt (system instructions + mode-specific task + progress from previous iterations)
-2. Spawns `srt claude --dangerously-skip-permissions --print ...`
+2. Spawns `claude --dangerously-skip-permissions --print ...` (wrapped in `srt` if the sandbox is available)
 3. Claude reads host files, analyzes them, writes findings
 4. Checks for completion signal (`SECY_COMPLETE`)
 5. If not complete, loops with fresh context (reads progress file for continuity)
@@ -264,7 +266,7 @@ AUDIT_MAX_ITERATIONS=3      # Max iterations for audit mode
 MONITOR_MAX_ITERATIONS=2    # Max iterations for monitor mode
 BASELINE_MAX_ITERATIONS=1   # Max iterations for baseline capture
 CLAUDE_MODEL="sonnet"       # Claude model to use
-MAX_BUDGET_USD="1.00"       # Spend cap per iteration (API key auth)
+MAX_BUDGET_USD="1.00"       # Spend cap per iteration
 ```
 
 ### Sandbox settings (`agent/conf/srt-settings.json`)
@@ -284,4 +286,5 @@ Prototype. Not audited for production use. Redaction patterns and blocklists are
 - [docs/sandboxing.md](docs/sandboxing.md) — Security architecture and threat model
 - [docs/shift.md](docs/shift.md) — Design decision: file reading vs command execution
 - [docs/ai-agent-landscape.md](docs/ai-agent-landscape.md) — Analysis of Ralph, Ralph Playbook, OpenClaw
-- [DESIGN.md](DESIGN.md) — sread threat model and trust assumptions
+- [docs/sandboxing-audit.md](docs/sandboxing-audit.md) — Sandboxing audit findings
+- [docs/DESIGN.md](docs/DESIGN.md) — sread threat model and trust assumptions
