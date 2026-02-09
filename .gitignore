@@ -1,0 +1,3 @@
+# Runtime state (baselines, findings, progress, locks)
+state/
+.env

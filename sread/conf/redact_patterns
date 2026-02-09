@@ -1,0 +1,35 @@
+# Regex patterns for redacting sensitive values from audit output.
+# Format: PATTERN|||REPLACEMENT
+# Uses sed -E (ERE) syntax with POSIX character classes.
+# Backreferences use \1, \2, etc. Delimiter is ~ (tilde).
+# NOTE: Use [[:space:]] not \s — sed ERE doesn't support \s.
+
+# Passwords in config files (key=value, key: value)
+(password|passwd|pass|secret|token|api_key|apikey|api_secret|auth_token)[[:space:]]*[=:][[:space:]]*['"]?[^[:space:]'"]+|||\1=<REDACTED>
+(PASSWORD|PASSWD|SECRET|TOKEN|API_KEY|APIKEY|AUTH_TOKEN)[[:space:]]*[=:][[:space:]]*['"]?[^[:space:]'"]+|||\1=<REDACTED>
+
+# Connection strings with embedded credentials
+(mysql|postgres|postgresql|mongodb|redis|amqp|smtp)://[^@]+@|||\1://<REDACTED>@
+
+# AWS-style keys
+AKIA[0-9A-Z]{16}|||<AWS_KEY_REDACTED>
+
+# Bearer tokens in logs
+(Bearer[[:space:]]+)[^[:space:]]+|||\1<REDACTED>
+(Authorization:[[:space:]]*)[^[:space:]]+|||\1<REDACTED>
+
+# JWT tokens (header.payload.signature, each part is base64url)
+eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}|||<JWT_REDACTED>
+
+# GitHub tokens (ghp_, gho_, ghu_, ghs_, ghr_)
+(ghp_|gho_|ghu_|ghs_|ghr_)[A-Za-z0-9_]{36,}|||<GITHUB_TOKEN_REDACTED>
+
+# Generic base64 secrets in key=value context (long base64 values after secret-like keys)
+(PRIVATE_KEY|private_key|SECRET_KEY|secret_key)[[:space:]]*[=:][[:space:]]*['"]?[A-Za-z0-9+/=]{40,}|||\1=<REDACTED>
+
+# Hash values from shadow-like entries
+\$[0-9a-z]\$[^[:space:]:]+|||\$<HASH_REDACTED>
+
+# Private key content
+-----BEGIN.*PRIVATE KEY-----|||<PRIVATE_KEY_REDACTED>
+-----END.*PRIVATE KEY-----|||<PRIVATE_KEY_REDACTED>

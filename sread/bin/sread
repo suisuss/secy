@@ -1,0 +1,166 @@
+#!/usr/bin/env bash
+# sread — Restricted security audit tool for AI agents
+#
+# Usage: sread <module> [args...]
+#        sudo sread <module> [args...]    (for modules requiring root)
+#
+# This is the only binary that should be in the sudoers allowlist.
+# It dispatches to audit modules after validating arguments.
+
+set -euo pipefail
+
+SREAD_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export SREAD_ROOT
+
+source "${SREAD_ROOT}/lib/common.sh"
+
+VERSION="0.1.0"
+
+# ── Safety checks ──────────────────────────────────────────────────
+
+# Refuse to run if the binary is writable by non-root
+_check_integrity() {
+    local self
+    self="$(readlink -f "$0")"
+    if [[ -w "$self" ]] && [[ $EUID -ne 0 ]]; then
+        # Writable by current user — ok for development
+        # In production, this binary should be root-owned 0755
+        log_warn "sread binary is writable by current user (ok for development)"
+    fi
+}
+
+# Block shell metacharacters in arguments
+_validate_args() {
+    for arg in "$@"; do
+        if [[ "$arg" =~ [\;\|\&\$\`\\] ]]; then
+            log_error "BLOCKED: Argument contains shell metacharacters: '${arg}'"
+            log_error "sread does not permit shell injection in arguments"
+            exit 1
+        fi
+        # Block subshell attempts
+        if [[ "$arg" =~ \$\( ]] || [[ "$arg" =~ \<\( ]]; then
+            log_error "BLOCKED: Argument contains subshell syntax: '${arg}'"
+            exit 1
+        fi
+    done
+}
+
+# ── Module dispatch ────────────────────────────────────────────────
+
+MODULES_DIR="${SREAD_ROOT}/lib/modules"
+
+_list_modules() {
+    local mod
+    for mod in "${MODULES_DIR}"/*.sh; do
+        [[ -f "$mod" ]] || continue
+        basename "$mod" .sh
+    done
+}
+
+_show_help() {
+    echo "sread v${VERSION} — Restricted security audit tool"
+    echo ""
+    echo "Usage: sread <module> [args...]"
+    echo ""
+    echo "Available modules:"
+    for mod in $(_list_modules); do
+        printf "  %-14s" "$mod"
+        # Extract first comment line as description
+        local desc
+        desc="$(head -3 "${MODULES_DIR}/${mod}.sh" | grep '^# ' | head -1 | sed 's/^# //')"
+        echo "$desc"
+    done
+    echo ""
+    echo "Options:"
+    echo "  --capabilities   Show what sread can and cannot do"
+    echo "  --version        Show version"
+    echo "  --help           Show this help"
+}
+
+_show_capabilities() {
+    section_header "sread capabilities"
+    echo "CAN do:"
+    echo "  - Read system config files (with sensitive values redacted)"
+    echo "  - Inspect file permissions, ownership, ACLs"
+    echo "  - List open ports, services, firewall rules"
+    echo "  - List installed packages and versions"
+    echo "  - Enumerate users, groups, sudo rules"
+    echo "  - Read system logs (with credentials redacted)"
+    echo "  - Find setuid binaries, world-writable files"
+    echo "  - Dump kernel parameters"
+    echo "  - List cron jobs"
+    echo ""
+    echo "CANNOT do:"
+    echo "  - Read credential files (/etc/shadow, private keys, .env, etc.)"
+    echo "  - Read binary files, images, archives, databases, or PDFs (MIME type checked)"
+    echo "  - Execute arbitrary commands"
+    echo "  - Write, modify, or delete anything"
+    echo "  - Access network from audit context"
+    echo "  - Use shell metacharacters (pipes, redirects, subshells)"
+    echo "  - Read device files, sockets, or /proc/kcore"
+    echo ""
+    echo "Blocked paths: $(wc -l < "${SREAD_CONF}/blocked_paths" | tr -d ' ') patterns loaded"
+    echo "Allowed MIME types: $(grep -vc '^\s*#\|^\s*$' "${SREAD_CONF}/allowed_mimetypes" 2>/dev/null || echo 0) types loaded"
+    echo "Redact patterns: $(grep -c '|||' "${SREAD_CONF}/redact_patterns" 2>/dev/null || echo 0) rules loaded"
+}
+
+# ── Audit logging ──────────────────────────────────────────────────
+
+# Prefer /var/log (installed), fall back to state dir, then /tmp
+if [[ -w /var/log/sread-audit.log ]]; then
+    SREAD_LOG="${SREAD_LOG:-/var/log/sread-audit.log}"
+elif [[ -n "${SECY_STATE_DIR:-}" ]] && [[ -d "${SECY_STATE_DIR}" ]]; then
+    SREAD_LOG="${SREAD_LOG:-${SECY_STATE_DIR}/sread-audit.log}"
+else
+    SREAD_LOG="${SREAD_LOG:-/tmp/sread-audit.log}"
+fi
+
+_audit_log() {
+    local entry
+    entry="$(date -Iseconds) uid=${EUID} sudo_user=${SUDO_USER:-none} module=$1 args=${*:2}"
+    # Best-effort logging — don't fail if log dir isn't writable
+    # Rotate if log exceeds 1MB to avoid filling tmpfs
+    if [[ -f "$SREAD_LOG" ]] && [[ "$(stat -c%s "$SREAD_LOG" 2>/dev/null || echo 0)" -gt 1048576 ]]; then
+        mv "$SREAD_LOG" "${SREAD_LOG}.1" 2>/dev/null || true
+    fi
+    echo "$entry" >> "$SREAD_LOG" 2>/dev/null || true
+}
+
+# ── Main ───────────────────────────────────────────────────────────
+
+main() {
+    _check_integrity
+
+    if [[ $# -eq 0 ]] || [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
+        _show_help
+        exit 0
+    fi
+
+    case "$1" in
+        --version)    echo "sread v${VERSION}"; exit 0 ;;
+        --capabilities) _show_capabilities; exit 0 ;;
+    esac
+
+    local module="$1"
+    shift
+    local module_script="${MODULES_DIR}/${module}.sh"
+
+    if [[ ! -f "$module_script" ]]; then
+        log_error "Unknown module: '${module}'"
+        echo ""
+        _show_help
+        exit 1
+    fi
+
+    # Validate remaining arguments for shell injection
+    _validate_args "$@"
+
+    # Log the invocation
+    _audit_log "$module" "$@"
+
+    # Dispatch to module
+    source "$module_script"
+    run "$@"
+}
+
+main "$@"

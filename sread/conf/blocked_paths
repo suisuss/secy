@@ -1,0 +1,63 @@
+# Paths that sread will NEVER read content from.
+# Metadata (permissions, ownership) can still be inspected via the perms module.
+# One pattern per line. Supports glob patterns.
+
+# Credential stores
+/etc/shadow
+/etc/shadow-
+/etc/gshadow
+/etc/gshadow-
+/etc/security/opasswd
+
+# SSH private keys
+/etc/ssh/ssh_host_*_key
+/root/.ssh/*
+/home/*/.ssh/id_*
+/home/*/.ssh/*_id_*
+
+# TLS/SSL private keys
+/etc/ssl/private/*
+/etc/letsencrypt/live/*/privkey.pem
+/etc/pki/tls/private/*
+
+# Application secrets
+/home/*/.env
+/home/*/.env.*
+/root/.env
+/root/.env.*
+**/credentials.json
+**/secrets.yml
+**/secrets.yaml
+**/.secret.*
+**/vault.json
+**/token
+**/keyfile
+
+# Database files (may contain credentials in plaintext)
+**/*.sqlite
+**/*.db
+
+# GPG/PGP
+/home/*/.gnupg/private-keys-v1.d/*
+/root/.gnupg/private-keys-v1.d/*
+
+# Git-crypt keys
+**/.git-crypt/keys/*
+
+# Password managers
+/home/*/.password-store/*
+/root/.password-store/*
+
+# Cloud credentials
+/home/*/.aws/credentials
+/home/*/.config/gcloud/credentials.db
+/home/*/.kube/config
+/root/.aws/credentials
+/root/.config/gcloud/credentials.db
+/root/.kube/config
+
+# Kernel/memory (information disclosure)
+/proc/kcore
+/proc/kallsyms
+/dev/mem
+/dev/kmem

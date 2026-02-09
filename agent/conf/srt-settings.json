@@ -1,0 +1,41 @@
+{
+  "enableWeakerNestedSandbox": true,
+
+  "network": {
+    "allowedDomains": [
+      "api.anthropic.com"
+    ],
+    "deniedDomains": []
+  },
+
+  "filesystem": {
+    "denyRead": [
+      "/host/etc/shadow",
+      "/host/etc/shadow-",
+      "/host/etc/gshadow",
+      "/host/etc/gshadow-",
+      "/host/etc/security/opasswd",
+      "/host/etc/ssh/ssh_host_ed25519_key",
+      "/host/etc/ssh/ssh_host_rsa_key",
+      "/host/etc/ssh/ssh_host_ecdsa_key",
+      "/host/etc/ssl/private",
+      "/host/root/.ssh",
+      "/host/root/.gnupg",
+      "/host/root/.aws/credentials",
+      "/host/root/.kube/config",
+      "/host/root/.env",
+      "/host/root/.password-store",
+      "/host/proc/kcore",
+      "/host/proc/kallsyms",
+      "/host/dev/mem",
+      "/host/dev/kmem"
+    ],
+
+    "allowWrite": [
+      "/var/lib/secy/state",
+      "/tmp"
+    ],
+
+    "denyWrite": []
+  }
+}
