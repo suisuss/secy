@@ -99,8 +99,10 @@ run_agent() {
 
         local stream_formatter="${AGENT_DIR}/lib/format-stream.sh"
 
-        local output
-        output=$($claude_cmd \
+        local raw_json
+        raw_json="$(mktemp)"
+
+        $claude_cmd \
             --dangerously-skip-permissions \
             --print \
             --verbose \
@@ -110,8 +112,12 @@ run_agent() {
             --tools "$ALLOWED_TOOLS" \
             --system-prompt "$system_prompt" \
             -p "$prompt" \
-            2> >(cat >&2) \
-            | tee >(bash "$stream_formatter" >&2)) || true
+            | tee "$raw_json" \
+            | bash "$stream_formatter" >&2 || true
+
+        local output
+        output="$(cat "$raw_json")"
+        rm -f "$raw_json"
 
         if check_completion "$output"; then
             log_agent "Agent signaled completion at iteration ${i}"

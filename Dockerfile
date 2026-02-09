@@ -42,8 +42,9 @@ COPY --from=build /tmp/sread-bin /usr/local/bin/sread
 COPY agent/ /opt/secy/
 RUN chmod +x /opt/secy/secy.sh /opt/secy/entrypoint.sh
 
-# srt settings — Anthropic sandbox-runtime configuration
-COPY agent/conf/srt-settings.json /root/.srt-settings.json
+# srt settings — staged outside /root (which is a tmpfs at runtime).
+# entrypoint.sh copies this into place.
+COPY agent/conf/srt-settings.json /opt/secy/conf/srt-settings.json
 
 # State directory — mount a volume here for persistent findings
 RUN mkdir -p /var/lib/secy/state

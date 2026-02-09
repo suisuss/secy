@@ -2,17 +2,19 @@
 # entrypoint.sh — Container entrypoint that sets up runtime state
 # before handing off to secy.sh.
 #
-# Handles:
-#   - Copying OAuth credentials from staging mount into the Claude Code
-#     tmpfs (the bind mount at /root/.claude/.credentials.json is shadowed
-#     by the tmpfs at /root/.claude, so we stage via /mnt).
+# /root is a tmpfs (see docker-compose.yml), so files baked into
+# the image at /root/* are shadowed. We stage them elsewhere and
+# copy them in here.
 
 set -euo pipefail
 
-# ── OAuth credential setup ─────────────────────────────────────────
-# The credential file is bind-mounted to /mnt/claude-credentials.json
-# (read-only) to avoid being shadowed by the /root/.claude tmpfs.
-# Copy it into the tmpfs where Claude Code expects it.
+# ── Populate /root tmpfs ─────────────────────────────────────────
+
+# srt settings — staged at build time to /opt/secy/conf/
+cp /opt/secy/conf/srt-settings.json /root/.srt-settings.json
+
+# OAuth credentials — bind-mounted to /mnt (read-only) to avoid
+# being shadowed by the /root tmpfs.
 if [[ -f /mnt/claude-credentials.json ]]; then
     mkdir -p /root/.claude
     cp /mnt/claude-credentials.json /root/.claude/.credentials.json

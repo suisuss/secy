@@ -49,9 +49,7 @@ services:
 
     tmpfs:
       - /tmp:size=64m
-      - /root/.claude:size=64m
-      - /root/.npm:size=32m
-      - /root/.config:size=32m
+      - /root:size=64m
 
     security_opt:
       - no-new-privileges:true
