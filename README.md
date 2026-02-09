@@ -178,26 +178,6 @@ See [docs/sandboxing.md](docs/sandboxing.md) for the full threat model.
 - Prompt injection from host files (malicious log entries, poisoned configs) could influence agent reasoning. The three layers constrain what the agent can do in response.
 - Audit data is sent to the Claude API. This is inherent to using a cloud LLM.
 
-## sread modules
-
-sread is a restricted audit tool that the agent uses for reading config files that may contain secrets. It can also be used standalone.
-
-| Module | What it does |
-|--------|-------------|
-| `files <path>` | Read config file with blocklist enforcement and output redaction |
-| `perms <path>` | File permissions, ACLs, attributes (no content) |
-| `ports` | Open ports and listeners (via `ss`) |
-| `services` | Systemd unit state |
-| `packages` | Installed packages |
-| `users` | Users, groups, sudoers, logins |
-| `firewall` | iptables/nftables/ufw rules |
-| `logs <type>` | System logs with redaction |
-| `sysctl` | Kernel parameters |
-| `cron` | Cron jobs and systemd timers |
-| `setuid` | SUID/SGID binaries |
-| `world` | World-writable files/dirs |
-| `full` | Run all modules |
-
 ## Project structure
 
 ```
@@ -212,17 +192,17 @@ secy/
 │       ├── agent-common.sh        # Lock, preflight, prompt assembly
 │       └── format-stream.sh       # Stream-JSON formatter for activity log
 ├── bin/
-│   └── sread                      # sread entrypoint
+│   └── sread                      # Restricted read tool (blocklist + redaction)
 ├── lib/
 │   ├── common.sh                  # Shared utilities
 │   ├── redact.sh                  # Output redaction engine
 │   ├── blocklist.sh               # Path blocking, MIME checking
-│   └── modules/                   # 12 audit modules + full.sh
+│   └── modules/                   # Audit modules (files, ports, users, ...)
 ├── conf/
-│   ├── sread.sudoers              # sudoers drop-in (for non-Docker use)
 │   ├── blocked_paths              # Credential file patterns
 │   ├── allowed_mimetypes          # MIME type whitelist
-│   └── redact_patterns            # Output redaction regexes
+│   ├── redact_patterns            # Output redaction regexes
+│   └── sread.sudoers              # sudoers drop-in (for non-Docker use)
 ├── tests/                         # Unit + integration tests
 ├── docs/
 │   ├── DESIGN.md                  # sread threat model
@@ -275,7 +255,7 @@ Network and filesystem restrictions enforced by Anthropic's sandbox-runtime. See
 
 ### sread settings (`conf/`)
 
-Blocklist patterns, redaction regexes, and MIME type whitelist. Edit these to tune what the agent can and cannot read through sread.
+sread is a restricted read tool the agent can use for config files that may contain secrets. It enforces a path blocklist, redacts sensitive values in output, and rejects non-text files. Edit `conf/blocked_paths`, `conf/redact_patterns`, and `conf/allowed_mimetypes` to tune its behavior. Run `sread --help` for available modules.
 
 ## Status
 
