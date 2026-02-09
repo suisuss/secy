@@ -1,5 +1,5 @@
 # List systemd services and their states
-# Usage: secy services [--failed]
+# Usage: sread services [--failed]
 
 run() {
     warn_if_container

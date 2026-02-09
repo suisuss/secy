@@ -3,16 +3,16 @@
 
 set -euo pipefail
 
-SECY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-export SECY_ROOT
-source "${SECY_ROOT}/lib/blocklist.sh"
+SREAD_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export SREAD_ROOT
+source "${SREAD_ROOT}/lib/blocklist.sh"
 
 PASS=0
 FAIL=0
 inc_pass() { PASS=$((PASS + 1)); }
 inc_fail() { FAIL=$((FAIL + 1)); }
 
-TMPDIR="$(mktemp -d /tmp/secy-mime-test.XXXXXX)"
+TMPDIR="$(mktemp -d /tmp/sread-mime-test.XXXXXX)"
 trap "rm -rf '$TMPDIR'" EXIT
 
 # Create test files with known content

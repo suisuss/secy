@@ -1,7 +1,7 @@
 # Read system logs with redaction
-# Usage: secy logs [auth|syslog|journal|kern] [--lines N]
+# Usage: sread logs [auth|syslog|journal|kern] [--lines N]
 
-source "${SECY_ROOT}/lib/redact.sh"
+source "${SREAD_ROOT}/lib/redact.sh"
 
 run() {
     local log_type="${1:-auth}"

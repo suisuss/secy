@@ -1,4 +1,4 @@
-# secy — Design Document
+# sread — Design Document
 
 ## Motivation
 
@@ -16,19 +16,19 @@ Security auditing requires root-level read access: configs, logs, permissions, s
 
 ### Layer 1: sudoers allowlist
 
-Only the `secy` wrapper binary is permitted in sudoers. Not `cat`, not `less`, not `grep`. One binary, NOEXEC'd to prevent shell escapes, env_reset'd to prevent environment injection.
+Only the `sread` wrapper binary is permitted in sudoers. Not `cat`, not `less`, not `grep`. One binary, NOEXEC'd to prevent shell escapes, env_reset'd to prevent environment injection.
 
 ```sudoers
-Cmnd_Alias SECY_AUDIT = /usr/local/bin/secy
-Defaults!SECY_AUDIT noexec, env_reset
-%secy-audit ALL=(root) NOPASSWD: SECY_AUDIT
+Cmnd_Alias SREAD_AUDIT = /usr/local/bin/sread
+Defaults!SREAD_AUDIT noexec, env_reset
+%sread-audit ALL=(root) NOPASSWD: SREAD_AUDIT
 ```
 
 **Why this matters:** Sudoers can restrict commands but not arguments effectively. `sudo cat /etc/ssh/sshd_config` and `sudo cat /etc/shadow` are the same command to sudoers. The wrapper applies argument-level policy.
 
 ### Layer 2: Wrapper scripts with argument validation
 
-The `secy` binary:
+The `sread` binary:
 - Validates module names against a known set
 - Blocks shell metacharacters in all arguments (`;`, `|`, `&`, `$`, `` ` ``, `\`)
 - Blocks subshell syntax (`$(...)`, `<(...)`)
@@ -43,7 +43,7 @@ For higher-security deployments, run audit commands inside a restricted namespac
 ```bash
 unshare --mount --net=none --pid --fork \
     --root=/audit-chroot \
-    -- secy-command "$@"
+    -- sread-command "$@"
 ```
 
 - Read-only bind mounts of host filesystem
@@ -60,6 +60,8 @@ Audit output passes through a redaction engine before being returned. Patterns i
 - Connection strings with embedded credentials (`postgres://user:pass@...`)
 - Bearer tokens and Authorization headers
 - AWS-style access keys
+- JWT tokens (`eyJ...` header.payload.signature)
+- GitHub tokens (`ghp_`, `gho_`, `ghu_`, `ghs_`, `ghr_`)
 - Base64-encoded blobs that look like keys
 - Hash values from shadow-like entries
 - Private key content
@@ -70,9 +72,9 @@ Audit output passes through a redaction engine before being returned. Patterns i
 
 ### Assumptions
 
-- The `secy` binary is root-owned, not writable by the agent's user
-- The sudoers entry permits only the `secy` binary
-- The agent cannot modify `secy` source, config, or blocklists
+- The `sread` binary is root-owned, not writable by the agent's user
+- The sudoers entry permits only the `sread` binary
+- The agent cannot modify `sread` source, config, or blocklists
 - Output redaction is **best-effort** — audit output should still be treated as sensitive
 - Human review of audit output is expected (this is defense-in-depth, not a sandbox)
 
@@ -97,7 +99,7 @@ This is inherently sensitive. The conversation transcript containing this data s
 
 ## Comparison: Agent-as-Executor vs Agent-as-Analyst
 
-| Aspect | Agent runs audit (secy) | Agent analyzes report |
+| Aspect | Agent runs audit (sread) | Agent analyzes report |
 |--------|------------------------|----------------------|
 | Interactive follow-up | Yes — "check that file" | No — static report |
 | Attack surface | Elevated shell access | None (just text) |
@@ -107,11 +109,11 @@ This is inherently sensitive. The conversation transcript containing this data s
 
 **Recommendation for production:** Use the agent-as-analyst model. Run Lynis/OpenSCAP/CIS-CAT yourself, feed the output to the agent. This gets 80% of the value with almost none of the risk.
 
-**secy exists for:** The remaining 20% — interactive investigation, follow-up questions ("what are the permissions on that specific directory?"), and cases where the agent needs to autonomously explore system state.
+**sread exists for:** The remaining 20% — interactive investigation, follow-up questions ("what are the permissions on that specific directory?"), and cases where the agent needs to autonomously explore system state.
 
 ## What an ideal Claude Code integration would need
 
-Beyond what secy provides at the shell level:
+Beyond what sread provides at the shell level:
 
 | Requirement | Why |
 |---|---|

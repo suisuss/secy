@@ -1,5 +1,5 @@
 # List open ports, listening services, and active connections
-# Usage: secy ports [--all]
+# Usage: sread ports [--all]
 
 run() {
     warn_if_container

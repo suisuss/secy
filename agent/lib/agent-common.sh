@@ -1,21 +1,21 @@
 #!/usr/bin/env bash
-# secy-agent/lib/agent-common.sh — Shared functions for the agent loop
+# secy/lib/agent-common.sh — Shared functions for the agent loop
 
 set -euo pipefail
 
 AGENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# SECY_ROOT can be set externally (e.g. in Docker where agent and secy are separate)
-if [[ -z "${SECY_ROOT:-}" ]]; then
-    SECY_ROOT="$(cd "${AGENT_DIR}/.." && pwd)"
+# SREAD_ROOT can be set externally (e.g. in Docker where agent and sread are separate)
+if [[ -z "${SREAD_ROOT:-}" ]]; then
+    SREAD_ROOT="$(cd "${AGENT_DIR}/.." && pwd)"
 fi
-export SECY_ROOT
+export SREAD_ROOT
 
 source "${AGENT_DIR}/conf/agent.conf"
 
 # ── Logging ───────────────────────────────────────────────────────
 
 log_agent() {
-    echo "[secy-agent $(date -Iseconds)] $*" >&2
+    echo "[secy $(date -Iseconds)] $*" >&2
 }
 
 # ── Preflight checks ─────────────────────────────────────────────
@@ -23,7 +23,7 @@ log_agent() {
 preflight_check() {
     local missing=false
 
-    for cmd in claude srt secy; do
+    for cmd in claude srt sread; do
         if ! command -v "$cmd" &>/dev/null; then
             log_agent "ERROR: '${cmd}' not found in PATH"
             missing=true
@@ -35,14 +35,14 @@ preflight_check() {
     fi
 
     if [[ $EUID -ne 0 ]]; then
-        log_agent "ERROR: secy-agent must run as root (run inside Docker container)"
+        log_agent "ERROR: secy must run as root (run inside Docker container)"
         exit 1
     fi
 
     # Verify host filesystem is mounted
     if [[ ! -d "/host/etc" ]]; then
         log_agent "ERROR: Host filesystem not found at /host"
-        log_agent "       Run via: docker compose run secy-agent <mode>"
+        log_agent "       Run via: docker compose run secy <mode>"
         exit 1
     fi
 }
@@ -66,7 +66,7 @@ acquire_lock() {
             local pid
             pid="$(cat "$pidfile")"
             if kill -0 "$pid" 2>/dev/null; then
-                log_agent "ERROR: secy-agent already running (pid ${pid})"
+                log_agent "ERROR: secy already running (pid ${pid})"
                 exit 1
             fi
             # Stale lock from crashed run
@@ -118,7 +118,7 @@ For each item, read the source file and write its content to the baseline path:
 
 Also write \`${STATE_DIR}/baseline/baseline.meta\` with the hostname (from /host/etc/hostname), date (${timestamp}), kernel (from /host/proc/version), and OS (from /host/etc/os-release).
 
-When ALL files are saved, output SECY_AGENT_COMPLETE as the very last line.
+When ALL files are saved, output SECY_COMPLETE as the very last line.
 "
             ;;
         audit)
@@ -184,5 +184,5 @@ $(cat "${STATE_DIR}/progress.md")
 check_completion() {
     local output="$1"
     # Works for both plain text and stream-json output
-    echo "$output" | grep -q "SECY_AGENT_COMPLETE"
+    echo "$output" | grep -q "SECY_COMPLETE"
 }

@@ -1,5 +1,5 @@
 # Find world-writable files and directories
-# Usage: secy world [--path /search/root]
+# Usage: sread world [--path /search/root]
 
 run() {
     require_root

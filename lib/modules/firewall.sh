@@ -1,5 +1,5 @@
 # Dump firewall rules (iptables and/or nftables)
-# Usage: secy firewall
+# Usage: sread firewall
 
 run() {
     require_root

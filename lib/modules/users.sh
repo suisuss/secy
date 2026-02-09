@@ -1,7 +1,7 @@
 # Enumerate users, groups, last logins, and sudo configuration
-# Usage: secy users
+# Usage: sread users
 
-source "${SECY_ROOT}/lib/redact.sh"
+source "${SREAD_ROOT}/lib/redact.sh"
 
 run() {
     require_root

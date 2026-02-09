@@ -16,7 +16,7 @@ An autonomous AI agent that reads your system's files, identifies security anoma
 │  │  ┌──────────────────────────────────────────┐  │  │
 │  │  │  Claude Code                             │  │  │
 │  │  │  Reads /host/proc, /host/etc, /host/var  │  │  │
-│  │  │  Uses secy for redacted config reads     │  │  │
+│  │  │  Uses sread for redacted config reads    │  │  │
 │  │  │  Writes findings to state volume         │  │  │
 │  │  └──────────────────────────────────────────┘  │  │
 │  └────────────────────────────────────────────────┘  │
@@ -25,7 +25,7 @@ An autonomous AI agent that reads your system's files, identifies security anoma
 
 The agent reads host state directly from files — `/proc/net/tcp` for open ports, `/etc/passwd` for users, `/proc/sys/` for kernel parameters, `/var/log/auth.log` for login attempts. No commands are executed on the host. The container has no host namespace access.
 
-For config files that may contain secrets, the agent uses `secy` — a restricted audit tool with blocklist enforcement and output redaction.
+For config files that may contain secrets, the agent uses `sread` — a restricted audit tool with blocklist enforcement and output redaction.
 
 ## Quick start
 
@@ -37,13 +37,13 @@ git clone https://github.com/suisuss/secy.git && cd secy
 docker compose build
 
 # Run a security audit
-ANTHROPIC_API_KEY=sk-... docker compose run secy-agent audit
+ANTHROPIC_API_KEY=sk-... docker compose run secy audit
 
 # Capture a baseline (for change detection)
-ANTHROPIC_API_KEY=sk-... docker compose run secy-agent baseline
+ANTHROPIC_API_KEY=sk-... docker compose run secy baseline
 
 # Monitor for changes against baseline
-ANTHROPIC_API_KEY=sk-... docker compose run secy-agent monitor
+ANTHROPIC_API_KEY=sk-... docker compose run secy monitor
 ```
 
 Findings are written to `./state/findings/` on the host.
@@ -94,7 +94,7 @@ Three independent layers, each enforced at a different level:
 |-------|-----------|----------|
 | **Docker** | Read-only host mount, read-only container, `no-new-privileges`, minimal capabilities | Host modification, privilege escalation, command execution on host |
 | **srt** | Network allowlist (`api.anthropic.com` only), filesystem deny on credentials | Data exfiltration, credential theft at OS level |
-| **secy** | Path blocklist, output redaction, MIME type whitelist, argument validation | Credential file reads, password leakage in output, binary file reads |
+| **sread** | Path blocklist, output redaction, MIME type whitelist, argument validation | Credential file reads, password leakage in output, binary file reads |
 
 See [docs/sandboxing.md](docs/sandboxing.md) for the full threat model.
 
@@ -104,9 +104,9 @@ See [docs/sandboxing.md](docs/sandboxing.md) for the full threat model.
 - Prompt injection from host files (malicious log entries, poisoned configs) could influence agent reasoning. The three layers constrain what the agent can do in response.
 - Audit data is sent to the Claude API. This is inherent to using a cloud LLM.
 
-## secy modules
+## sread modules
 
-secy is a restricted audit tool that the agent uses for reading config files that may contain secrets. It can also be used standalone.
+sread is a restricted audit tool that the agent uses for reading config files that may contain secrets. It can also be used standalone.
 
 | Module | What it does |
 |--------|-------------|
@@ -129,7 +129,7 @@ secy is a restricted audit tool that the agent uses for reading config files tha
 ```
 secy/
 ├── agent/
-│   ├── secy-agent.sh              # Outer loop (Ralph pattern)
+│   ├── secy.sh                    # Outer loop (Ralph pattern)
 │   ├── AGENT.md                   # Agent prompt — security domain knowledge
 │   ├── conf/
 │   │   ├── agent.conf             # Iteration limits, model, settings
@@ -137,14 +137,14 @@ secy/
 │   └── lib/
 │       └── agent-common.sh        # Lock, preflight, prompt assembly
 ├── bin/
-│   └── secy                       # secy entrypoint
+│   └── sread                      # sread entrypoint
 ├── lib/
 │   ├── common.sh                  # Shared utilities
 │   ├── redact.sh                  # Output redaction engine
 │   ├── blocklist.sh               # Path blocking, MIME checking
 │   └── modules/                   # 12 audit modules + full.sh
 ├── conf/
-│   ├── secy.sudoers               # sudoers drop-in (for non-Docker use)
+│   ├── sread.sudoers              # sudoers drop-in (for non-Docker use)
 │   ├── blocked_paths              # Credential file patterns
 │   ├── allowed_mimetypes          # MIME type whitelist
 │   └── redact_patterns            # Output redaction regexes
@@ -159,20 +159,20 @@ secy/
 │   └── findings/                  # Timestamped reports
 ├── Dockerfile
 ├── docker-compose.yml
-├── install.sh                     # secy standalone install
-├── DESIGN.md                      # secy threat model
+├── install.sh                     # sread standalone install
+├── DESIGN.md                      # sread threat model
 └── .gitignore
 ```
 
 ## Agent architecture
 
-secy-agent uses the [Ralph pattern](docs/ai-agent-landscape.md#ralph): a bash loop that spawns fresh Claude Code instances with filesystem-based memory.
+secy uses the [Ralph pattern](docs/ai-agent-landscape.md#ralph): a bash loop that spawns fresh Claude Code instances with filesystem-based memory.
 
 Each iteration:
 1. Assembles a prompt (system instructions + mode-specific task + progress from previous iterations)
 2. Spawns `srt claude --dangerously-skip-permissions --print ...`
 3. Claude reads host files, analyzes them, writes findings
-4. Checks for completion signal (`SECY_AGENT_COMPLETE`)
+4. Checks for completion signal (`SECY_COMPLETE`)
 5. If not complete, loops with fresh context (reads progress file for continuity)
 
 This means:
@@ -197,9 +197,9 @@ MAX_BUDGET_USD="1.00"       # Spend cap per iteration (API key auth)
 
 Network and filesystem restrictions enforced by Anthropic's sandbox-runtime. See [docs/sandboxing.md](docs/sandboxing.md).
 
-### secy settings (`conf/`)
+### sread settings (`conf/`)
 
-Blocklist patterns, redaction regexes, and MIME type whitelist. Edit these to tune what the agent can and cannot read through secy.
+Blocklist patterns, redaction regexes, and MIME type whitelist. Edit these to tune what the agent can and cannot read through sread.
 
 ## Requirements
 
@@ -215,4 +215,4 @@ Prototype. Not audited for production use. Redaction patterns and blocklists are
 - [docs/sandboxing.md](docs/sandboxing.md) — Security architecture and threat model
 - [docs/shift.md](docs/shift.md) — Design decision: file reading vs command execution
 - [docs/ai-agent-landscape.md](docs/ai-agent-landscape.md) — Analysis of Ralph, Ralph Playbook, OpenClaw
-- [DESIGN.md](DESIGN.md) — secy threat model and trust assumptions
+- [DESIGN.md](DESIGN.md) — sread threat model and trust assumptions

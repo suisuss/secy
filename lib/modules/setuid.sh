@@ -1,5 +1,5 @@
 # Find setuid and setgid binaries on the system
-# Usage: secy setuid [--path /search/root]
+# Usage: sread setuid [--path /search/root]
 
 run() {
     require_root

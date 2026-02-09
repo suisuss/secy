@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# secy-agent — Autonomous security monitoring agent
+# secy — Autonomous security monitoring agent
 #
 # Uses the Ralph pattern: a bash loop spawning fresh Claude Code instances
 # with filesystem-based memory. Each iteration gets a clean context window,
-# reads state from disk, runs secy modules, and writes findings.
+# reads state from disk, runs sread modules, and writes findings.
 #
 # Usage:
-#   secy-agent baseline    Capture what "normal" looks like
-#   secy-agent audit       Full security sweep with anomaly analysis
-#   secy-agent monitor     Compare current state against baseline
+#   secy baseline    Capture what "normal" looks like
+#   secy audit       Full security sweep with anomaly analysis
+#   secy monitor     Compare current state against baseline
 
 set -euo pipefail
 
@@ -18,9 +18,9 @@ source "${AGENT_DIR}/lib/agent-common.sh"
 # ── Usage ─────────────────────────────────────────────────────────
 
 usage() {
-    echo "secy-agent — Autonomous security monitoring agent"
+    echo "secy — Autonomous security monitoring agent"
     echo ""
-    echo "Usage: secy-agent <mode>"
+    echo "Usage: secy <mode>"
     echo ""
     echo "Modes:"
     echo "  baseline    Capture current system state as the 'normal' reference"
@@ -50,7 +50,7 @@ run_agent() {
 
     # Monitor mode requires a baseline
     if [[ "$mode" == "monitor" ]] && [[ ! -f "${STATE_DIR}/baseline/baseline.meta" ]]; then
-        log_agent "ERROR: No baseline found. Run 'secy-agent baseline' first."
+        log_agent "ERROR: No baseline found. Run 'secy baseline' first."
         exit 1
     fi
 

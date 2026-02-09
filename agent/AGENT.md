@@ -98,17 +98,17 @@ date -Iseconds                                           # Current timestamp
 
 **Do NOT run:** `curl`, `wget`, `nc`, `ssh`, `apt`, `pip`, or any network command — they will fail (network is sandboxed). **Do NOT run:** `ss`, `systemctl`, `iptables`, `sysctl`, `journalctl` — they show container state, not host state. Read the equivalent files instead.
 
-### secy (for redacted config reads)
+### sread (for redacted config reads)
 
-Use `secy files <path>` when reading config files that likely contain passwords, connection strings, or API keys:
+Use `sread files <path>` when reading config files that likely contain passwords, connection strings, or API keys:
 
 ```bash
-secy files /host/etc/mysql/my.cnf
-secy files /host/etc/postgresql/pg_hba.conf
-secy files /host/etc/redis/redis.conf
+sread files /host/etc/mysql/my.cnf
+sread files /host/etc/postgresql/pg_hba.conf
+sread files /host/etc/redis/redis.conf
 ```
 
-secy strips sensitive values (passwords, tokens, keys) and replaces them with `<REDACTED>`. This is expected behavior, not a finding.
+sread strips sensitive values (passwords, tokens, keys) and replaces them with `<REDACTED>`. This is expected behavior, not a finding.
 
 For standard system files without secrets (`/etc/passwd`, `/etc/ssh/sshd_config`, `/proc/net/tcp`, log files), use the Read or Grep tool directly.
 
@@ -364,7 +364,7 @@ If a section has no findings, include it with "None." Do not omit sections.
 
 When you have finished ALL work — including writing the findings report and updating the progress file — output this exact line as the VERY LAST LINE of your response:
 
-SECY_AGENT_COMPLETE
+SECY_COMPLETE
 
 If you are NOT finished and want to continue investigating in the next iteration, do NOT output this line. Instead, update the progress file with what you found and what needs follow-up.
 

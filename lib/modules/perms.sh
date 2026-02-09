@@ -1,9 +1,9 @@
 # Inspect file/directory permissions without reading content
-# Usage: secy perms <path> [path...]
+# Usage: sread perms <path> [path...]
 
 run() {
     if [[ $# -eq 0 ]]; then
-        log_error "Usage: secy perms <path> [path...]"
+        log_error "Usage: sread perms <path> [path...]"
         exit 1
     fi
 

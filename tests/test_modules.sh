@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# Integration tests for secy modules (runs without sudo — tests structure only)
+# Integration tests for sread modules (runs without sudo — tests structure only)
 
 set -euo pipefail
 
-SECY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-SECY_BIN="${SECY_ROOT}/bin/secy"
+SREAD_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+SREAD_BIN="${SREAD_ROOT}/bin/sread"
 
 PASS=0
 FAIL=0
@@ -54,27 +54,27 @@ echo "=== Module Structure Tests ==="
 echo ""
 
 echo "-- Help and info --"
-assert_exits_zero "secy --help" "$SECY_BIN" --help
-assert_exits_zero "secy --version" "$SECY_BIN" --version
-assert_exits_zero "secy --capabilities" "$SECY_BIN" --capabilities
-assert_output_contains "version string" "secy v" "$SECY_BIN" --version
+assert_exits_zero "sread --help" "$SREAD_BIN" --help
+assert_exits_zero "sread --version" "$SREAD_BIN" --version
+assert_exits_zero "sread --capabilities" "$SREAD_BIN" --capabilities
+assert_output_contains "version string" "sread v" "$SREAD_BIN" --version
 
 echo ""
 echo "-- Unknown module --"
-assert_exits_nonzero "unknown module fails" "$SECY_BIN" nonexistent
+assert_exits_nonzero "unknown module fails" "$SREAD_BIN" nonexistent
 
 echo ""
 echo "-- Argument injection blocked --"
-assert_exits_nonzero "semicolon blocked" "$SECY_BIN" files "/etc/passwd;cat /etc/shadow"
-assert_exits_nonzero "pipe blocked" "$SECY_BIN" files "/etc/passwd|cat"
-assert_exits_nonzero "backtick blocked" "$SECY_BIN" files '/etc/`whoami`'
-assert_exits_nonzero "dollar-paren blocked" "$SECY_BIN" files '/etc/$(whoami)'
+assert_exits_nonzero "semicolon blocked" "$SREAD_BIN" files "/etc/passwd;cat /etc/shadow"
+assert_exits_nonzero "pipe blocked" "$SREAD_BIN" files "/etc/passwd|cat"
+assert_exits_nonzero "backtick blocked" "$SREAD_BIN" files '/etc/`whoami`'
+assert_exits_nonzero "dollar-paren blocked" "$SREAD_BIN" files '/etc/$(whoami)'
 
 echo ""
 echo "-- Modules that don't need root --"
-assert_exits_zero "services module" "$SECY_BIN" services
-assert_exits_zero "packages module" "$SECY_BIN" packages
-assert_exits_zero "sysctl module" "$SECY_BIN" sysctl --security
+assert_exits_zero "services module" "$SREAD_BIN" services
+assert_exits_zero "packages module" "$SREAD_BIN" packages
+assert_exits_zero "sysctl module" "$SREAD_BIN" sysctl --security
 
 echo ""
 echo "=== Results: ${PASS} passed, ${FAIL} failed ==="

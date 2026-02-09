@@ -1,5 +1,5 @@
 # Dump kernel parameters with security-relevant highlights
-# Usage: secy sysctl [--security]
+# Usage: sread sysctl [--security]
 
 run() {
     warn_if_container

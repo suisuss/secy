@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # entrypoint.sh — Container entrypoint that sets up runtime state
-# before handing off to secy-agent.sh.
+# before handing off to secy.sh.
 #
 # Handles:
 #   - Copying OAuth credentials from staging mount into the Claude Code
@@ -18,5 +18,5 @@ if [[ -f /mnt/claude-credentials.json ]]; then
     cp /mnt/claude-credentials.json /root/.claude/.credentials.json
 fi
 
-# ── Hand off to secy-agent ─────────────────────────────────────────
-exec /opt/secy-agent/secy-agent.sh "$@"
+# ── Hand off to secy ─────────────────────────────────────────────
+exec /opt/secy/secy.sh "$@"

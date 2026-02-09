@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
-# secy — Restricted security audit tool for AI agents
+# sread — Restricted security audit tool for AI agents
 #
-# Usage: secy <module> [args...]
-#        sudo secy <module> [args...]    (for modules requiring root)
+# Usage: sread <module> [args...]
+#        sudo sread <module> [args...]    (for modules requiring root)
 #
 # This is the only binary that should be in the sudoers allowlist.
 # It dispatches to audit modules after validating arguments.
 
 set -euo pipefail
 
-SECY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-export SECY_ROOT
+SREAD_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export SREAD_ROOT
 
-source "${SECY_ROOT}/lib/common.sh"
+source "${SREAD_ROOT}/lib/common.sh"
 
 VERSION="0.1.0"
 
@@ -25,7 +25,7 @@ _check_integrity() {
     if [[ -w "$self" ]] && [[ $EUID -ne 0 ]]; then
         # Writable by current user — ok for development
         # In production, this binary should be root-owned 0755
-        log_warn "secy binary is writable by current user (ok for development)"
+        log_warn "sread binary is writable by current user (ok for development)"
     fi
 }
 
@@ -34,7 +34,7 @@ _validate_args() {
     for arg in "$@"; do
         if [[ "$arg" =~ [\;\|\&\$\`\\] ]]; then
             log_error "BLOCKED: Argument contains shell metacharacters: '${arg}'"
-            log_error "secy does not permit shell injection in arguments"
+            log_error "sread does not permit shell injection in arguments"
             exit 1
         fi
         # Block subshell attempts
@@ -47,7 +47,7 @@ _validate_args() {
 
 # ── Module dispatch ────────────────────────────────────────────────
 
-MODULES_DIR="${SECY_ROOT}/lib/modules"
+MODULES_DIR="${SREAD_ROOT}/lib/modules"
 
 _list_modules() {
     local mod
@@ -58,9 +58,9 @@ _list_modules() {
 }
 
 _show_help() {
-    echo "secy v${VERSION} — Restricted security audit tool"
+    echo "sread v${VERSION} — Restricted security audit tool"
     echo ""
-    echo "Usage: secy <module> [args...]"
+    echo "Usage: sread <module> [args...]"
     echo ""
     echo "Available modules:"
     for mod in $(_list_modules); do
@@ -72,13 +72,13 @@ _show_help() {
     done
     echo ""
     echo "Options:"
-    echo "  --capabilities   Show what secy can and cannot do"
+    echo "  --capabilities   Show what sread can and cannot do"
     echo "  --version        Show version"
     echo "  --help           Show this help"
 }
 
 _show_capabilities() {
-    section_header "secy capabilities"
+    section_header "sread capabilities"
     echo "CAN do:"
     echo "  - Read system config files (with sensitive values redacted)"
     echo "  - Inspect file permissions, ownership, ACLs"
@@ -99,20 +99,20 @@ _show_capabilities() {
     echo "  - Use shell metacharacters (pipes, redirects, subshells)"
     echo "  - Read device files, sockets, or /proc/kcore"
     echo ""
-    echo "Blocked paths: $(wc -l < "${SECY_CONF}/blocked_paths" | tr -d ' ') patterns loaded"
-    echo "Allowed MIME types: $(grep -vc '^\s*#\|^\s*$' "${SECY_CONF}/allowed_mimetypes" 2>/dev/null || echo 0) types loaded"
-    echo "Redact patterns: $(grep -c '|||' "${SECY_CONF}/redact_patterns" 2>/dev/null || echo 0) rules loaded"
+    echo "Blocked paths: $(wc -l < "${SREAD_CONF}/blocked_paths" | tr -d ' ') patterns loaded"
+    echo "Allowed MIME types: $(grep -vc '^\s*#\|^\s*$' "${SREAD_CONF}/allowed_mimetypes" 2>/dev/null || echo 0) types loaded"
+    echo "Redact patterns: $(grep -c '|||' "${SREAD_CONF}/redact_patterns" 2>/dev/null || echo 0) rules loaded"
 }
 
 # ── Audit logging ──────────────────────────────────────────────────
 
 # Prefer /var/log (installed), fall back to state dir, then /tmp
-if [[ -w /var/log/secy-audit.log ]]; then
-    SECY_LOG="${SECY_LOG:-/var/log/secy-audit.log}"
+if [[ -w /var/log/sread-audit.log ]]; then
+    SREAD_LOG="${SREAD_LOG:-/var/log/sread-audit.log}"
 elif [[ -n "${SECY_STATE_DIR:-}" ]] && [[ -d "${SECY_STATE_DIR}" ]]; then
-    SECY_LOG="${SECY_LOG:-${SECY_STATE_DIR}/secy-audit.log}"
+    SREAD_LOG="${SREAD_LOG:-${SECY_STATE_DIR}/sread-audit.log}"
 else
-    SECY_LOG="${SECY_LOG:-/tmp/secy-audit.log}"
+    SREAD_LOG="${SREAD_LOG:-/tmp/sread-audit.log}"
 fi
 
 _audit_log() {
@@ -120,10 +120,10 @@ _audit_log() {
     entry="$(date -Iseconds) uid=${EUID} sudo_user=${SUDO_USER:-none} module=$1 args=${*:2}"
     # Best-effort logging — don't fail if log dir isn't writable
     # Rotate if log exceeds 1MB to avoid filling tmpfs
-    if [[ -f "$SECY_LOG" ]] && [[ "$(stat -c%s "$SECY_LOG" 2>/dev/null || echo 0)" -gt 1048576 ]]; then
-        mv "$SECY_LOG" "${SECY_LOG}.1" 2>/dev/null || true
+    if [[ -f "$SREAD_LOG" ]] && [[ "$(stat -c%s "$SREAD_LOG" 2>/dev/null || echo 0)" -gt 1048576 ]]; then
+        mv "$SREAD_LOG" "${SREAD_LOG}.1" 2>/dev/null || true
     fi
-    echo "$entry" >> "$SECY_LOG" 2>/dev/null || true
+    echo "$entry" >> "$SREAD_LOG" 2>/dev/null || true
 }
 
 # ── Main ───────────────────────────────────────────────────────────
@@ -137,7 +137,7 @@ main() {
     fi
 
     case "$1" in
-        --version)    echo "secy v${VERSION}"; exit 0 ;;
+        --version)    echo "sread v${VERSION}"; exit 0 ;;
         --capabilities) _show_capabilities; exit 0 ;;
     esac
 

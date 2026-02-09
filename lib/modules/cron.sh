@@ -1,7 +1,7 @@
 # List cron jobs for all users
-# Usage: secy cron
+# Usage: sread cron
 
-source "${SECY_ROOT}/lib/redact.sh"
+source "${SREAD_ROOT}/lib/redact.sh"
 
 run() {
     require_root

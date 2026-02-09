@@ -1,4 +1,4 @@
-# MIME types that secy is allowed to read content from.
+# MIME types that sread is allowed to read content from.
 # Anything NOT matching these prefixes is blocked.
 # This is a whitelist — unlisted types are rejected.
 #

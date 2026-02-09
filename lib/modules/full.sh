@@ -1,5 +1,5 @@
 # Run all audit modules and produce a combined report
-# Usage: secy full
+# Usage: sread full
 
 run() {
     require_root
@@ -8,7 +8,7 @@ run() {
     start="$(date -Iseconds)"
 
     echo "================================================================"
-    echo "  SECY FULL SECURITY AUDIT REPORT"
+    echo "  SREAD FULL SECURITY AUDIT REPORT"
     echo "  Host: $(hostname)"
     echo "  Date: ${start}"
     echo "  Kernel: $(uname -r)"
@@ -17,9 +17,9 @@ run() {
 
     local modules=(ports services packages users firewall sysctl cron setuid world)
     for mod in "${modules[@]}"; do
-        if [[ -f "${SECY_ROOT}/lib/modules/${mod}.sh" ]]; then
+        if [[ -f "${SREAD_ROOT}/lib/modules/${mod}.sh" ]]; then
             log_info "Running module: ${mod}"
-            "${SECY_ROOT}/bin/secy" "$mod" 2>&1 || log_warn "Module '${mod}' exited with errors"
+            "${SREAD_ROOT}/bin/sread" "$mod" 2>&1 || log_warn "Module '${mod}' exited with errors"
         fi
     done
 

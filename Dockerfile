@@ -1,6 +1,19 @@
+# ── Build stage ──────────────────────────────────────────────────────
+FROM node:22-bookworm-slim AS build
+
+# Install Claude Code CLI and sandbox-runtime (srt)
+RUN npm install -g @anthropic-ai/claude-code @anthropic-ai/sandbox-runtime
+
+# Prepare sread binary (patch root path for container layout)
+COPY bin/ /tmp/sread-src/bin/
+RUN sed 's|^SREAD_ROOT=.*|SREAD_ROOT="/usr/local/lib/sread"|' \
+    /tmp/sread-src/bin/sread > /tmp/sread-bin \
+    && chmod 755 /tmp/sread-bin
+
+# ── Run stage ────────────────────────────────────────────────────────
 FROM debian:bookworm-slim
 
-# Core utilities + srt dependencies (bubblewrap, socat for Linux sandboxing)
+# Runtime system dependencies (bubblewrap + socat for Linux sandboxing)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash \
     coreutils \
@@ -9,47 +22,39 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     file \
     curl \
     ca-certificates \
-    gnupg \
     bubblewrap \
     socat \
     ripgrep \
     jq \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Node.js (required for Claude Code CLI and srt)
-RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
-    && apt-get install -y --no-install-recommends nodejs \
-    && rm -rf /var/lib/apt/lists/*
+# Node.js runtime + globally-installed CLI tools from build stage
+COPY --from=build /usr/local/bin /usr/local/bin
+COPY --from=build /usr/local/lib/node_modules /usr/local/lib/node_modules
 
-# Install Claude Code CLI and sandbox-runtime (srt)
-RUN npm install -g @anthropic-ai/claude-code @anthropic-ai/sandbox-runtime
-
-# Install secy (used for redacted reads of config files with secrets)
-COPY bin/ /usr/local/lib/secy/bin/
-COPY lib/ /usr/local/lib/secy/lib/
-COPY conf/ /usr/local/lib/secy/conf/
-
-RUN sed 's|^SECY_ROOT=.*|SECY_ROOT="/usr/local/lib/secy"|' \
-    /usr/local/lib/secy/bin/secy > /usr/local/bin/secy \
-    && chmod 755 /usr/local/bin/secy
+# Install sread (used for redacted reads of config files with secrets)
+COPY bin/ /usr/local/lib/sread/bin/
+COPY lib/ /usr/local/lib/sread/lib/
+COPY conf/ /usr/local/lib/sread/conf/
+COPY --from=build /tmp/sread-bin /usr/local/bin/sread
 
 # Install agent
-COPY agent/ /opt/secy-agent/
-RUN chmod +x /opt/secy-agent/secy-agent.sh /opt/secy-agent/entrypoint.sh
+COPY agent/ /opt/secy/
+RUN chmod +x /opt/secy/secy.sh /opt/secy/entrypoint.sh
 
 # srt settings — Anthropic sandbox-runtime configuration
 COPY agent/conf/srt-settings.json /root/.srt-settings.json
 
 # State directory — mount a volume here for persistent findings
-RUN mkdir -p /var/lib/secy-agent/state
+RUN mkdir -p /var/lib/secy/state
 
-ENV SECY_STATE_DIR=/var/lib/secy-agent/state
+ENV SECY_STATE_DIR=/var/lib/secy/state
 
 # Claude Code allows --dangerously-skip-permissions as root when IS_SANDBOX=1.
 # This is the intended escape hatch — Docker is the real sandbox boundary.
 ENV IS_SANDBOX=1
 
-WORKDIR /opt/secy-agent
+WORKDIR /opt/secy
 
-ENTRYPOINT ["/opt/secy-agent/entrypoint.sh"]
+ENTRYPOINT ["/opt/secy/entrypoint.sh"]
 CMD ["audit"]

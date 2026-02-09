@@ -68,7 +68,7 @@ Ralph represents the use case where an agent needs to **write** to the filesyste
 - Both face prompt injection risk (Ralph via malicious code in repos it's working on)
 - Ralph's "backpressure" concept (tests/lints as guardrails) is analogous to secy's blocklist/redaction layers
 
-A Ralph-style loop running `secy` modules instead of raw shell commands would be a significantly more constrained audit agent — able to investigate iteratively without the blast radius of raw `sudo`.
+A Ralph-style loop running `sread` modules instead of raw shell commands would be a significantly more constrained audit agent — able to investigate iteratively without the blast radius of raw `sudo`.
 
 ---
 
@@ -148,7 +148,7 @@ The playbook's structure of phases could apply to security auditing:
 | Phase 2: Planning | Enumerate what to check, prioritize by risk |
 | Phase 3: Building | Run audit modules, investigate findings, produce report |
 
-The `IMPLEMENTATION_PLAN.md` pattern — a living document the agent updates as it works — could translate to an audit findings document that accumulates across secy module runs.
+The `IMPLEMENTATION_PLAN.md` pattern — a living document the agent updates as it works — could translate to an audit findings document that accumulates across sread module runs.
 
 ---
 
@@ -273,7 +273,7 @@ This is notable — it's one of the few AI agent projects that ships its own sec
 
 OpenClaw is the most relevant project to secy's mission because:
 
-1. **It already has a security audit tool.** The patterns in `openclaw security audit` are worth studying — file permission checks, credential exposure scanning, attack surface enumeration. These could inform secy modules.
+1. **It already has a security audit tool.** The patterns in `openclaw security audit` are worth studying — file permission checks, credential exposure scanning, attack surface enumeration. These could inform sread modules.
 
 2. **It demonstrates the risks of broad agent access.** A single Node.js process with access to all messaging platforms, all LLM credentials, all session history, and shell execution capability is a high-value target. This is exactly the attack surface secy is designed to constrain.
 
@@ -307,9 +307,9 @@ OpenClaw is the most relevant project to secy's mission because:
 
 ### What secy could offer these projects
 
-1. **For Ralph/Playbook:** A `secy`-gated audit phase before the build loop. Instead of jumping straight into coding, run `secy full` to understand the system's security posture, then incorporate findings into the implementation plan.
+1. **For Ralph/Playbook:** A `sread`-gated audit phase before the build loop. Instead of jumping straight into coding, run `sread full` to understand the system's security posture, then incorporate findings into the implementation plan.
 
-2. **For OpenClaw:** Replace the raw exec tool with secy-gated commands for audit use cases. Instead of `sudo cat /etc/sshd_config`, the agent calls `secy files /etc/ssh/sshd_config` — getting the content with redaction and blocklist enforcement.
+2. **For OpenClaw:** Replace the raw exec tool with sread-gated commands for audit use cases. Instead of `sudo cat /etc/sshd_config`, the agent calls `sread files /etc/ssh/sshd_config` — getting the content with redaction and blocklist enforcement.
 
 3. **For all three:** A standardized way to grant read-only elevated access without the binary choice of "full sudo" or "no access." The four-layer defense (sudoers allowlist, argument validation, MIME type checking, output redaction) is a middle ground that doesn't exist in any of these projects today.
 

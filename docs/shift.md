@@ -4,7 +4,7 @@ This document captures the architectural decision to move from command execution
 
 ## The original approach
 
-secy modules wrap system commands: `ss` for ports, `systemctl` for services, `iptables` for firewall rules, `sysctl` for kernel parameters. The agent runs these commands via `sudo secy <module>` and analyzes the output.
+sread modules wrap system commands: `ss` for ports, `systemctl` for services, `iptables` for firewall rules, `sysctl` for kernel parameters. The agent runs these commands via `sudo sread <module>` and analyzes the output.
 
 This required:
 - `sudo` access (via sudoers allowlist)
@@ -42,18 +42,18 @@ Mount the host filesystem read-only at `/host`. The agent reads files directly.
 
 | Before | After |
 |---|---|
-| `sudo secy ports` → runs `ss` | Read `/host/proc/net/tcp` |
-| `sudo secy sysctl --security` → runs `sysctl -a` | Read `/host/proc/sys/...` files |
-| `sudo secy users` → runs `getent`, parses passwd | Read `/host/etc/passwd`, `/host/etc/group` |
-| `sudo secy firewall` → runs `iptables -L` | Read `/host/etc/nftables.conf` |
-| `sudo secy services` → runs `systemctl` | Read `/host/etc/systemd/system/*` |
+| `sudo sread ports` → runs `ss` | Read `/host/proc/net/tcp` |
+| `sudo sread sysctl --security` → runs `sysctl -a` | Read `/host/proc/sys/...` files |
+| `sudo sread users` → runs `getent`, parses passwd | Read `/host/etc/passwd`, `/host/etc/group` |
+| `sudo sread firewall` → runs `iptables -L` | Read `/host/etc/nftables.conf` |
+| `sudo sread services` → runs `systemctl` | Read `/host/etc/systemd/system/*` |
 | `--net=host`, `--pid=host` | Not needed |
 | `NET_ADMIN`, `NET_RAW` capabilities | Not needed |
 | iproute2, iptables, nftables, procps packages | Not needed |
 
 **What didn't change:**
 
-- `secy files <path>` is still used for config files with sensitive content — its blocklist and redaction engine add value that direct reads don't provide
+- `sread files <path>` is still used for config files with sensitive content — its blocklist and redaction engine add value that direct reads don't provide
 - `find` is still needed for SUID/world-writable scans (permissions aren't readable from a single file)
 - `diff` is still needed for baseline comparison
 
@@ -81,7 +81,7 @@ Example:
 
 ## Consequences
 
-**Simplified container:** Fewer packages, no namespace sharing, minimal capabilities. The Dockerfile installs `findutils`, `file`, `diffutils`, and `curl` — that's it beyond Node.js and Claude Code.
+**Simplified container:** Fewer packages, no namespace sharing, minimal capabilities. The Dockerfile installs `findutils`, `file`, `diffutils`, `curl`, and `jq` — that's it beyond Node.js and Claude Code.
 
 **Stronger security:** The container has no host network access, no host PID visibility, no ability to run host commands. The only interface to the host is a read-only filesystem mount.
 

@@ -1,4 +1,4 @@
-# Paths that secy will NEVER read content from.
+# Paths that sread will NEVER read content from.
 # Metadata (permissions, ownership) can still be inspected via the perms module.
 # One pattern per line. Supports glob patterns.
 

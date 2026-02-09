@@ -1,6 +1,6 @@
 # Sandboxing Architecture
 
-secy-agent runs inside a Docker container with three independent security layers. Each layer is designed to fail-closed: if any single layer is bypassed, the remaining layers still prevent damage.
+secy runs inside a Docker container with three independent security layers. Each layer is designed to fail-closed: if any single layer is bypassed, the remaining layers still prevent damage.
 
 ## Layer 1: Docker Container
 
@@ -51,12 +51,12 @@ The agent can ONLY reach `api.anthropic.com` — the Claude API endpoint. All ot
       "/host/root/.aws/credentials",
       "/host/proc/kcore", "/host/dev/mem"
     ],
-    "allowWrite": ["/var/lib/secy-agent/state", "/tmp"]
+    "allowWrite": ["/var/lib/secy/state", "/tmp"]
   }
 }
 ```
 
-OS-level enforcement of credential file blocking. Even if Claude Code bypasses secy's application-level blocklist, srt denies the read at the kernel level.
+OS-level enforcement of credential file blocking. Even if Claude Code bypasses sread's application-level blocklist, srt denies the read at the kernel level.
 
 ### Nested sandbox mode
 
@@ -70,22 +70,22 @@ Running srt inside Docker requires the weaker sandbox mode. This is acceptable b
 
 Per [Anthropic's guidance](https://www.anthropic.com/engineering/claude-code-sandboxing): this mode "should only be used in cases where additional isolation is otherwise enforced" — which is exactly our case.
 
-## Layer 3: secy
+## Layer 3: sread
 
-Application-level controls when reading config files through the `secy files` command.
+Application-level controls when reading config files through the `sread files` command.
 
 | Mechanism | What it does |
 |-----------|-------------|
 | **Blocklist** (`conf/blocked_paths`) | 64 glob patterns blocking credential files, private keys, databases, cloud creds |
-| **Redaction** (`conf/redact_patterns`) | 8 regex rules stripping passwords, API keys, bearer tokens, connection strings, hashes |
+| **Redaction** (`conf/redact_patterns`) | 11 regex rules stripping passwords, API keys, bearer tokens, connection strings, JWT tokens, GitHub tokens, base64 secrets, hashes |
 | **MIME check** (`conf/allowed_mimetypes`) | Whitelist of ~25 text/config MIME types — rejects binaries, images, archives |
 | **Argument validation** | Blocks shell metacharacters (`;|&$`), subshell syntax (`$(...)`, `<(...)`) |
 
-secy is the innermost defense. It's the only layer that understands file content — Docker and srt operate at the filesystem/network level.
+sread is the innermost defense. It's the only layer that understands file content — Docker and srt operate at the filesystem/network level.
 
 ## Combined threat model
 
-| Attack vector | Layer 1 (Docker) | Layer 2 (srt) | Layer 3 (secy) |
+| Attack vector | Layer 1 (Docker) | Layer 2 (srt) | Layer 3 (sread) |
 |---------------|:-:|:-:|:-:|
 | Write to host filesystem | Blocked (ro mount) | — | — |
 | Exfiltrate data via network | — | Blocked (domain allowlist) | — |

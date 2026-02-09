@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
-# secy installer — sets up sudoers rule and binary permissions
+# sread installer — sets up sudoers rule and binary permissions
 #
 # Usage: sudo ./install.sh [--uninstall]
 
 set -euo pipefail
 
-SECY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-INSTALL_BIN="/usr/local/bin/secy"
-INSTALL_LIB="/usr/local/lib/secy"
-SUDOERS_FILE="/etc/sudoers.d/secy"
-AUDIT_GROUP="secy-audit"
+SREAD_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+INSTALL_BIN="/usr/local/bin/sread"
+INSTALL_LIB="/usr/local/lib/sread"
+SUDOERS_FILE="/etc/sudoers.d/sread"
+AUDIT_GROUP="sread-audit"
 
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -26,7 +26,7 @@ if [[ $EUID -ne 0 ]]; then
 fi
 
 uninstall() {
-    log_info "Uninstalling secy..."
+    log_info "Uninstalling sread..."
     rm -f "$INSTALL_BIN"
     rm -rf "$INSTALL_LIB"
     rm -f "$SUDOERS_FILE"
@@ -36,7 +36,7 @@ uninstall() {
 }
 
 install() {
-    log_info "Installing secy..."
+    log_info "Installing sread..."
 
     # Create the audit group if it doesn't exist
     if ! getent group "$AUDIT_GROUP" &>/dev/null; then
@@ -48,8 +48,8 @@ install() {
 
     # Copy library files
     mkdir -p "$INSTALL_LIB"
-    cp -r "${SECY_ROOT}/lib/"* "$INSTALL_LIB/"
-    cp -r "${SECY_ROOT}/conf" "$INSTALL_LIB/"
+    cp -r "${SREAD_ROOT}/lib/"* "$INSTALL_LIB/"
+    cp -r "${SREAD_ROOT}/conf" "$INSTALL_LIB/"
 
     # Set ownership and permissions on library
     chown -R root:root "$INSTALL_LIB"
@@ -57,8 +57,8 @@ install() {
     # Config files should not be writable by anyone but root
     chmod 644 "$INSTALL_LIB"/conf/*
 
-    # Install the binary — rewrite SECY_ROOT to point to installed location
-    sed "s|^SECY_ROOT=.*|SECY_ROOT=\"${INSTALL_LIB}\"|" "${SECY_ROOT}/bin/secy" > "$INSTALL_BIN"
+    # Install the binary — rewrite SREAD_ROOT to point to installed location
+    sed "s|^SREAD_ROOT=.*|SREAD_ROOT=\"${INSTALL_LIB}\"|" "${SREAD_ROOT}/bin/sread" > "$INSTALL_BIN"
     chown root:root "$INSTALL_BIN"
     chmod 755 "$INSTALL_BIN"
 
@@ -66,7 +66,7 @@ install() {
     log_info "Installed library: ${INSTALL_LIB}"
 
     # Install sudoers rule
-    cp "${SECY_ROOT}/conf/secy.sudoers" "$SUDOERS_FILE"
+    cp "${SREAD_ROOT}/conf/sread.sudoers" "$SUDOERS_FILE"
     chmod 0440 "$SUDOERS_FILE"
     chown root:root "$SUDOERS_FILE"
 
@@ -80,9 +80,9 @@ install() {
     fi
 
     # Create audit log file
-    touch /var/log/secy-audit.log
-    chmod 640 /var/log/secy-audit.log
-    chown root:root /var/log/secy-audit.log
+    touch /var/log/sread-audit.log
+    chmod 640 /var/log/sread-audit.log
+    chown root:root /var/log/sread-audit.log
 
     echo ""
     log_info "Installation complete."
@@ -93,7 +93,7 @@ install() {
     echo ""
     echo "  2. Log out and back in (or run: newgrp ${AUDIT_GROUP})"
     echo ""
-    echo "  3. Test: sudo secy --capabilities"
+    echo "  3. Test: sudo sread --capabilities"
 }
 
 case "${1:-}" in

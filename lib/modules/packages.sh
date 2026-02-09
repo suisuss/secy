@@ -1,5 +1,5 @@
 # List installed packages and their versions
-# Usage: secy packages [--search <pattern>]
+# Usage: sread packages [--search <pattern>]
 
 run() {
     section_header "INSTALLED PACKAGES"

@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# secy/lib/blocklist.sh — Path blocking logic
+# sread/lib/blocklist.sh — Path blocking logic
 
 set -euo pipefail
 
-SECY_ROOT="${SECY_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-source "${SECY_ROOT}/lib/common.sh"
+SREAD_ROOT="${SREAD_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+source "${SREAD_ROOT}/lib/common.sh"
 
 # Load blocked paths from config, ignoring comments and blank lines
 _load_blocked_paths() {
-    local blocked_file="${SECY_CONF}/blocked_paths"
+    local blocked_file="${SREAD_CONF}/blocked_paths"
     if [[ ! -f "$blocked_file" ]]; then
         log_warn "Blocked paths config not found: ${blocked_file}"
         return
@@ -117,14 +117,14 @@ assert_regular_file() {
     fi
     if [[ ! -f "$target" ]]; then
         log_error "Not a regular file: ${target} (type: $(file -b "$target"))"
-        log_error "secy only reads regular files — not devices, sockets, or directories"
+        log_error "sread only reads regular files — not devices, sockets, or directories"
         exit 1
     fi
 }
 
 # Load allowed MIME type prefixes from config.
 _load_allowed_mimetypes() {
-    local allowed_file="${SECY_CONF}/allowed_mimetypes"
+    local allowed_file="${SREAD_CONF}/allowed_mimetypes"
     if [[ ! -f "$allowed_file" ]]; then
         log_warn "Allowed MIME types config not found: ${allowed_file}"
         return
@@ -174,7 +174,7 @@ assert_mimetype_allowed() {
         mime="$(file --mime-type -b "$target" 2>/dev/null || echo 'unknown')"
         log_error "BLOCKED: MIME type '${mime}' is not allowed for reading"
         log_error "File: ${target}"
-        log_error "secy only reads text and config files — not binaries, images, archives, or databases"
+        log_error "sread only reads text and config files — not binaries, images, archives, or databases"
         log_error "Allowed types are listed in conf/allowed_mimetypes"
         exit 1
     fi

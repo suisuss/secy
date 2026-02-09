@@ -1,17 +1,17 @@
 #!/usr/bin/env bash
-# secy/lib/redact.sh — Output redaction engine
+# sread/lib/redact.sh — Output redaction engine
 
 set -euo pipefail
 
-SECY_ROOT="${SECY_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-source "${SECY_ROOT}/lib/common.sh"
+SREAD_ROOT="${SREAD_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+source "${SREAD_ROOT}/lib/common.sh"
 
 # Build a sed script file from the redact_patterns config.
 # Each line in the config is: PATTERN|||REPLACEMENT
 # Delimiter: ASCII SOH (\x01) — cannot appear in text file content,
 # avoids collisions with ~ (home paths), @ (emails), / (paths).
 _build_sed_file() {
-    local patterns_file="${SECY_CONF}/redact_patterns"
+    local patterns_file="${SREAD_CONF}/redact_patterns"
     local sed_file="$1"
 
     if [[ ! -f "$patterns_file" ]]; then
@@ -48,7 +48,7 @@ _ensure_sed_file() {
     if [[ -n "$_REDACT_SED_FILE" ]] && [[ -s "$_REDACT_SED_FILE" ]]; then
         return 0
     fi
-    _REDACT_SED_FILE="$(mktemp /tmp/secy-redact.XXXXXX)"
+    _REDACT_SED_FILE="$(mktemp /tmp/sread-redact.XXXXXX)"
     if ! _build_sed_file "$_REDACT_SED_FILE"; then
         rm -f "$_REDACT_SED_FILE"
         _REDACT_SED_FILE=""

@@ -1,16 +1,17 @@
 services:
-  secy-agent:
+  secy:
     build: .
+    image: secy
 
     environment:
-      - SECY_ROOT=/usr/local/lib/secy
-      - SECY_STATE_DIR=/var/lib/secy-agent/state
+      - SREAD_ROOT=/usr/local/lib/sread
+      - SECY_STATE_DIR=/var/lib/secy/state
       # Uncomment for API key auth (pay-per-use) instead of OAuth
       # - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
 
     volumes:
       # Persist findings across container runs
-      - ./state:/var/lib/secy-agent/state
+      - ./state:/var/lib/secy/state
 
       # Host filesystem mounted read-only at /host
       - /:/host:ro
@@ -34,7 +35,7 @@ services:
     #   - enableWeakerNestedSandbox: true (Docker is the strong boundary)
 
     # Immutable container filesystem — only volumes and tmpfs are writable.
-    # Prevents the agent from modifying secy config, blocklists, or its own prompt.
+    # Prevents the agent from modifying sread config, blocklists, or its own prompt.
     read_only: true
 
     cap_drop:

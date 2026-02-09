@@ -32,7 +32,7 @@
     ],
 
     "allowWrite": [
-      "/var/lib/secy-agent/state",
+      "/var/lib/secy/state",
       "/tmp"
     ],
 

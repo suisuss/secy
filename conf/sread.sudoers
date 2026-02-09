@@ -1,0 +1,23 @@
+# /etc/sudoers.d/sread
+# Restricted sudo access for AI agent security auditing
+#
+# Install: sudo cp conf/sread.sudoers /etc/sudoers.d/sread
+#          sudo chmod 0440 /etc/sudoers.d/sread
+#          sudo visudo -cf /etc/sudoers.d/sread  # validate syntax
+
+# The sread binary must be owned by root and not writable by others
+# Install location: /usr/local/bin/sread
+
+# Define the audit command — ONLY the sread wrapper, nothing else
+Cmnd_Alias SREAD_AUDIT = /usr/local/bin/sread
+
+# Prevent shell escapes from any child process
+Defaults!SREAD_AUDIT noexec
+
+# Prevent environment variable injection
+Defaults!SREAD_AUDIT env_reset
+Defaults!SREAD_AUDIT secure_path="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+# Grant passwordless access to the sread command only
+# Replace %sread-audit with the appropriate user/group
+%sread-audit ALL=(root) NOPASSWD: SREAD_AUDIT

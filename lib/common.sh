@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# secy/lib/common.sh — Shared utilities for secy modules
+# sread/lib/common.sh — Shared utilities for sread modules
 
 set -euo pipefail
 
-SECY_ROOT="${SECY_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-SECY_CONF="${SECY_ROOT}/conf"
-SECY_LIB="${SECY_ROOT}/lib"
+SREAD_ROOT="${SREAD_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+SREAD_CONF="${SREAD_ROOT}/conf"
+SREAD_LIB="${SREAD_ROOT}/lib"
 
 # Colors (disabled if not a terminal)
 if [[ -t 1 ]]; then
@@ -19,10 +19,10 @@ else
     RED='' GREEN='' YELLOW='' BLUE='' BOLD='' RESET=''
 fi
 
-log_info()  { echo -e "${BLUE}[secy]${RESET} $*"; }
-log_warn()  { echo -e "${YELLOW}[secy:warn]${RESET} $*" >&2; }
-log_error() { echo -e "${RED}[secy:error]${RESET} $*" >&2; }
-log_ok()    { echo -e "${GREEN}[secy:ok]${RESET} $*"; }
+log_info()  { echo -e "${BLUE}[sread]${RESET} $*"; }
+log_warn()  { echo -e "${YELLOW}[sread:warn]${RESET} $*" >&2; }
+log_error() { echo -e "${RED}[sread:error]${RESET} $*" >&2; }
+log_ok()    { echo -e "${GREEN}[sread:ok]${RESET} $*"; }
 
 # Section headers for report output
 section_header() {
@@ -37,7 +37,7 @@ section_header() {
 # Check if running as root (via sudo)
 require_root() {
     if [[ $EUID -ne 0 ]]; then
-        log_error "This module requires root privileges. Run via: sudo secy $*"
+        log_error "This module requires root privileges. Run via: sudo sread $*"
         exit 1
     fi
 }

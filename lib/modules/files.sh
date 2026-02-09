@@ -1,12 +1,12 @@
 # Read config files with redaction and blocklist enforcement
-# Usage: secy files <path> [path...]
+# Usage: sread files <path> [path...]
 
-source "${SECY_ROOT}/lib/blocklist.sh"
-source "${SECY_ROOT}/lib/redact.sh"
+source "${SREAD_ROOT}/lib/blocklist.sh"
+source "${SREAD_ROOT}/lib/redact.sh"
 
 run() {
     if [[ $# -eq 0 ]]; then
-        log_error "Usage: secy files <path> [path...]"
+        log_error "Usage: sread files <path> [path...]"
         exit 1
     fi
 

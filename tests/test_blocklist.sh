@@ -3,9 +3,9 @@
 
 set -euo pipefail
 
-SECY_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-export SECY_ROOT
-source "${SECY_ROOT}/lib/blocklist.sh"
+SREAD_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+export SREAD_ROOT
+source "${SREAD_ROOT}/lib/blocklist.sh"
 
 PASS=0
 FAIL=0
