@@ -8,8 +8,6 @@ _entropy_estimate() {
     # High unique count (>240) suggests encrypted/compressed/random data
     local target="$1"
     local unique
-    unique="$(head -c 8192 "$target" 2>/dev/null | od -A n -t x1 | tr ' ' '\n' | grep -c . | sort -u | wc -l)" 2>/dev/null || echo "unknown"
-    # Actually: count distinct byte values
     unique="$(head -c 8192 "$target" 2>/dev/null | od -A n -t x1 | tr -s ' ' '\n' | sort -u | grep -c .)" 2>/dev/null || unique="unknown"
     echo "$unique"
 }
