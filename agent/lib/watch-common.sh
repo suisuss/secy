@@ -7,6 +7,13 @@ WATCH_STATE_DIR="${STATE_DIR}/watch"
 WATCH_SEEN_DB="${WATCH_STATE_DIR}/seen.db"
 WATCH_QUEUE_DIR="${WATCH_STATE_DIR}/queue"
 WATCH_FINDINGS_DIR="${STATE_DIR}/findings"
+WATCH_DIRECTIVES_FILE="${STATE_DIR}/directives/watch-config.conf"
+
+# Extra directories to scan (set by C2 directive)
+WATCH_EXTRA_DIRS=""
+
+# Track mtime of last-loaded directives file
+_WATCH_DIRECTIVE_MTIME=0
 
 # ── State directory management ────────────────────────────────────
 
@@ -221,4 +228,140 @@ write_alert() {
 EOF
 
     secy_log "watch" "${severity}: ${filepath} — ${detail} (${alert_file})"
+}
+
+# ── Directive reload ─────────────────────────────────────────────
+#
+# Checks state/directives/watch-config.conf for changes.
+# Reloads WATCH_SCAN_DEPTH and WATCH_EXTRA_DIRS if the file has been
+# updated since last check.
+
+check_watch_directives() {
+    # Check persistent watch-config.conf
+    _check_watch_config
+
+    # Process one-shot directive files
+    _process_watch_directive_files
+}
+
+_check_watch_config() {
+    [[ -f "$WATCH_DIRECTIVES_FILE" ]] || return 0
+
+    local current_mtime
+    current_mtime="$(stat -c%Y "$WATCH_DIRECTIVES_FILE" 2>/dev/null || echo 0)"
+
+    if [[ "$current_mtime" -le "$_WATCH_DIRECTIVE_MTIME" ]]; then
+        return 0
+    fi
+
+    _WATCH_DIRECTIVE_MTIME="$current_mtime"
+    secy_log "watch" "Reloading directives from ${WATCH_DIRECTIVES_FILE}"
+
+    while IFS= read -r line; do
+        # Skip comments and blank lines
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+        [[ -z "${line// /}" ]] && continue
+
+        local key value
+        key="$(echo "$line" | cut -d'=' -f1 | tr -d '[:space:]')"
+        value="$(echo "$line" | cut -d'=' -f2-)"
+        value="$(echo "$value" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+
+        case "$key" in
+            scan_depth)
+                if [[ "$value" =~ ^[0-9]+$ ]]; then
+                    WATCH_SCAN_DEPTH="$value"
+                    secy_log "watch" "Directive: scan_depth=${value}"
+                fi
+                ;;
+            extra_dirs)
+                WATCH_EXTRA_DIRS="$value"
+                secy_log "watch" "Directive: extra_dirs=${value}"
+                ;;
+        esac
+    done < "$WATCH_DIRECTIVES_FILE"
+}
+
+_process_watch_directive_files() {
+    local directives_dir="${STATE_DIR}/directives/active"
+    local applied_dir="${STATE_DIR}/directives/applied"
+    [[ -d "$directives_dir" ]] || return 0
+
+    for dfile in "${directives_dir}"/*.watch-directive; do
+        [[ -f "$dfile" ]] || continue
+
+        local basename
+        basename="$(basename "$dfile")"
+        secy_log "watch" "Processing directive: ${basename}"
+
+        local applied_changes=""
+        local apply_errors=""
+
+        while IFS= read -r line; do
+            [[ "$line" =~ ^[[:space:]]*# ]] && continue
+            [[ -z "${line// /}" ]] && continue
+
+            local key value
+            key="$(echo "$line" | cut -d'=' -f1 | tr -d '[:space:]')"
+            value="$(echo "$line" | cut -d'=' -f2-)"
+            value="$(echo "$value" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+
+            case "$key" in
+                scan_depth)
+                    if [[ "$value" =~ ^[0-9]+$ ]]; then
+                        local old_val="$WATCH_SCAN_DEPTH"
+                        WATCH_SCAN_DEPTH="$value"
+                        applied_changes+="  scan_depth: ${old_val} -> ${value}\n"
+                        secy_log "watch" "Directive: scan_depth=${value}"
+                    else
+                        apply_errors+="  scan_depth: invalid value '${value}'\n"
+                    fi
+                    ;;
+                extra_dirs)
+                    local old_val="$WATCH_EXTRA_DIRS"
+                    WATCH_EXTRA_DIRS="$value"
+                    applied_changes+="  extra_dirs: '${old_val}' -> '${value}'\n"
+                    secy_log "watch" "Directive: extra_dirs=${value}"
+                    ;;
+                *)
+                    apply_errors+="  ${key}: unknown key\n"
+                    ;;
+            esac
+        done < "$dfile"
+
+        # Move to applied/
+        mkdir -p "$applied_dir"
+        mv "$dfile" "${applied_dir}/${basename}" 2>/dev/null || true
+
+        # Write application report
+        {
+            echo "# Directive Application Report"
+            echo ""
+            echo "- **Directive**: ${basename}"
+            echo "- **Service**: watch"
+            echo "- **Timestamp**: $(date -Iseconds)"
+            echo "- **Status**: $(if [[ -n "$apply_errors" ]]; then echo "partial"; else echo "applied"; fi)"
+            echo ""
+            if [[ -n "$applied_changes" ]]; then
+                echo "## Changes Applied"
+                echo ""
+                printf "%b" "$applied_changes"
+                echo ""
+            fi
+            if [[ -n "$apply_errors" ]]; then
+                echo "## Errors"
+                echo ""
+                printf "%b" "$apply_errors"
+                echo ""
+            fi
+            if [[ -z "$applied_changes" ]] && [[ -z "$apply_errors" ]]; then
+                echo "## Result"
+                echo ""
+                echo "  No actionable entries found in directive."
+                echo ""
+            fi
+        } > "${applied_dir}/${basename}.report"
+
+        secy_log "watch" "Directive applied: ${basename} (report written)"
+    done
 }

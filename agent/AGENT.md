@@ -530,7 +530,7 @@ Write your report as markdown to the path given in your task instructions:
 ```
 # Security Audit Report
 - **Host**: [from /host/etc/hostname]
-- **Date**: [ISO timestamp]
+- **Timestamp**: [date -Iseconds, e.g. 2026-02-13T14:30:22+00:00]
 - **Mode**: [audit|monitor]
 - **OS**: [from /host/etc/os-release PRETTY_NAME]
 - **Kernel**: [from /host/proc/version]

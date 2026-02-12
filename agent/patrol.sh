@@ -151,6 +151,9 @@ main() {
             secy_log "patrol" "Tick: ran ${modules_run} module(s)"
         fi
 
+        # Check for C2 directives (schedule overrides, etc.)
+        check_directives
+
         # Phase 3: Review gate — invoke Claude if meaningful diffs accumulated
         if [[ "$NO_CLAUDE" != "true" ]]; then
             if should_review "$PATROL_REVIEW_INTERVAL"; then

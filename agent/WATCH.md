@@ -59,6 +59,14 @@ For each file, apply the appropriate checks based on file type:
 
 ## Verdict Format
 
+Write your report with this header:
+
+```
+# Watch Triage Report
+- **Timestamp**: [date -Iseconds, e.g. 2026-02-13T14:30:22+00:00]
+- **Files analyzed**: [count]
+```
+
 For each file, output a structured verdict:
 
 ```
@@ -90,8 +98,9 @@ For each file, output a structured verdict:
 1. **Do not fabricate indicators**. If you can't determine something from the available data, say so.
 2. **Context matters**. A script that runs `curl` isn't malicious if it's clearly a package manager wrapper. A binary with high entropy isn't malicious if it's a compressed installer.
 3. **Err toward SUSPICIOUS over CLEAN** when uncertain — false negatives are worse than false positives in malware triage.
-4. **Be specific**. Don't say "suspicious strings found" — quote the exact strings.
+4. **Be specific**. Don't say "suspicious strings found" — quote the exact strings, byte offsets, section names. Your reports are read by a supervisory C2 agent that correlates your findings with patrol scans (new ports, new processes, etc.) to identify compound threats and create issues for the host user. The more precise your evidence, the better the correlation.
 5. **Consider the source**. Files in a Downloads folder were likely downloaded by the user — they may be legitimate software. But also consider that Downloads is the #1 vector for social engineering malware.
+6. **Include raw evidence**. Always include file paths, SHA256 hashes, MIME types, entropy values, and specific suspicious strings or indicators in your report. The C2 agent cannot re-examine the files — it only sees what you write.
 
 ## Completion
 

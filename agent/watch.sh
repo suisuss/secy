@@ -12,6 +12,7 @@ set -euo pipefail
 
 AGENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${AGENT_DIR}/lib/watch-common.sh"
+source "${AGENT_DIR}/lib/inotify-watch.sh"
 
 # ── Flag parsing ─────────────────────────────────────────────────
 
@@ -101,8 +102,18 @@ scan_downloads() {
     local queued=0
     local skipped=0
 
+    # Build list of directories to scan: standard Downloads + extra dirs from C2
+    local scan_dirs=()
     for dl_dir in /host/home/*/Downloads; do
-        [[ -d "$dl_dir" ]] || continue
+        [[ -d "$dl_dir" ]] && scan_dirs+=("$dl_dir")
+    done
+    if [[ -n "$WATCH_EXTRA_DIRS" ]]; then
+        for extra_dir in $WATCH_EXTRA_DIRS; do
+            [[ -d "$extra_dir" ]] && scan_dirs+=("$extra_dir")
+        done
+    fi
+
+    for dl_dir in "${scan_dirs[@]}"; do
 
         # Find files (maxdepth 1 — don't recurse into subdirectories)
         while IFS= read -r -d '' filepath; do
@@ -290,6 +301,44 @@ ${file_details}
     fi
 }
 
+# ── Event callback ───────────────────────────────────────────────
+#
+# Called by watch_directory_loop on each inotify event or poll tick.
+# Runs the same scan+analyze logic, just triggered by callback.
+
+_WATCH_LAST_DIRECTIVE_CHECK=0
+
+on_watch_event() {
+    local event="$1"
+    local filename="$2"
+
+    # Periodically check for C2 directives
+    local now
+    now="$(date +%s)"
+    local elapsed=$(( now - _WATCH_LAST_DIRECTIVE_CHECK ))
+    if [[ $elapsed -ge $DIRECTIVE_CHECK_INTERVAL ]]; then
+        check_watch_directives
+        _WATCH_LAST_DIRECTIVE_CHECK="$now"
+    fi
+
+    # Scan for new files
+    _SCAN_NEW=0 _SCAN_MATCHES=0 _SCAN_QUEUED=0 _SCAN_SKIPPED=0
+    scan_downloads
+
+    if [[ $_SCAN_NEW -gt 0 ]]; then
+        secy_log "watch" "Scan: ${_SCAN_NEW} new, ${_SCAN_MATCHES} malware match(es), ${_SCAN_QUEUED} queued, ${_SCAN_SKIPPED} skipped"
+    fi
+
+    # If there are queued files and Claude is enabled, analyze them
+    if [[ "$NO_CLAUDE" != "true" ]]; then
+        local qsize
+        qsize="$(queue_size)"
+        if [[ "$qsize" -gt 0 ]]; then
+            analyze_batch
+        fi
+    fi
+}
+
 # ── Main daemon loop ─────────────────────────────────────────────
 
 main() {
@@ -305,27 +354,34 @@ main() {
     secy_log "watch" "  Claude:        $(if [[ "$NO_CLAUDE" == "true" ]]; then echo "disabled"; else echo "enabled"; fi)"
     secy_log "watch" "  Scanning:      /host/home/*/Downloads/"
 
-    while [[ "$SECY_DAEMON_RUNNING" == "true" ]]; do
-        # Scan for new files
-        _SCAN_NEW=0 _SCAN_MATCHES=0 _SCAN_QUEUED=0 _SCAN_SKIPPED=0
-        scan_downloads
-
-        if [[ $_SCAN_NEW -gt 0 ]]; then
-            secy_log "watch" "Scan: ${_SCAN_NEW} new, ${_SCAN_MATCHES} malware match(es), ${_SCAN_QUEUED} queued, ${_SCAN_SKIPPED} skipped"
+    # Find the first valid Downloads dir for inotify probe target
+    local primary_watch_dir=""
+    for dl in /host/home/*/Downloads; do
+        if [[ -d "$dl" ]]; then
+            primary_watch_dir="$dl"
+            break
         fi
-
-        # If there are queued files and Claude is enabled, analyze them
-        if [[ "$NO_CLAUDE" != "true" ]]; then
-            local qsize
-            qsize="$(queue_size)"
-            if [[ "$qsize" -gt 0 ]]; then
-                analyze_batch
-            fi
-        fi
-
-        # Sleep with interruptible wait
-        interruptible_sleep "$WATCH_POLL_INTERVAL"
     done
+
+    if [[ -z "$primary_watch_dir" ]]; then
+        secy_log "watch" "No Downloads directories found — falling back to poll mode"
+        primary_watch_dir="/host/home"
+    fi
+
+    # Collect extra watch dirs (remaining Downloads dirs beyond the primary)
+    local extra_watch_dirs=()
+    for dl in /host/home/*/Downloads; do
+        [[ -d "$dl" ]] || continue
+        [[ "$dl" == "$primary_watch_dir" ]] && continue
+        extra_watch_dirs+=("$dl")
+    done
+
+    watch_directory_loop \
+        "$primary_watch_dir" \
+        "on_watch_event" \
+        "$WATCH_POLL_INTERVAL" \
+        "watch" \
+        "${extra_watch_dirs[@]}"
 
     secy_log "watch" "Watch daemon stopped"
 }

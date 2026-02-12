@@ -9,6 +9,12 @@ PATROL_RUNS_DIR="${PATROL_STATE_DIR}/runs"
 PATROL_DIFFS_DIR="${PATROL_STATE_DIR}/diffs"
 PATROL_LAST_REVIEW="${PATROL_STATE_DIR}/last-review.ts"
 PATROL_FINDINGS_DIR="${STATE_DIR}/findings"
+PATROL_SCHEDULE_OVERRIDE="${STATE_DIR}/directives/schedule-override.conf"
+PATROL_DIRECTIVES_DIR="${STATE_DIR}/directives/active"
+PATROL_DIRECTIVES_APPLIED="${STATE_DIR}/directives/applied"
+
+# Track mtime of last-loaded schedule override
+_PATROL_OVERRIDE_MTIME=0
 
 # ── Default schedule ─────────────────────────────────────────────
 #
@@ -339,4 +345,191 @@ ${diffs}
     # Clear reviewed diffs and mark review done
     clear_reviewed_diffs
     mark_review_done
+}
+
+# ── Directive reload ─────────────────────────────────────────────
+#
+# C2 writes directives that adjust patrol behavior at runtime.
+# Two mechanisms:
+#   1. schedule-override.conf — persistent overrides (module.field=value)
+#   2. active/*.directive — one-shot directive files, moved to applied/ after processing
+
+check_directives() {
+    # Check schedule override file
+    _check_schedule_override
+
+    # Process individual directive files
+    _process_directive_files
+}
+
+_check_schedule_override() {
+    [[ -f "$PATROL_SCHEDULE_OVERRIDE" ]] || return 0
+
+    local current_mtime
+    current_mtime="$(stat -c%Y "$PATROL_SCHEDULE_OVERRIDE" 2>/dev/null || echo 0)"
+
+    if [[ "$current_mtime" -le "$_PATROL_OVERRIDE_MTIME" ]]; then
+        return 0
+    fi
+
+    _PATROL_OVERRIDE_MTIME="$current_mtime"
+    secy_log "patrol" "Reloading schedule overrides from ${PATROL_SCHEDULE_OVERRIDE}"
+    apply_schedule_overrides "$PATROL_SCHEDULE_OVERRIDE"
+}
+
+# Parse override format: module.field=value
+# Supported fields: interval, priority
+apply_schedule_overrides() {
+    local file="$1"
+
+    while IFS= read -r line; do
+        # Skip comments and blank lines
+        [[ "$line" =~ ^[[:space:]]*# ]] && continue
+        [[ -z "${line// /}" ]] && continue
+
+        local key value
+        key="$(echo "$line" | cut -d'=' -f1 | tr -d '[:space:]')"
+        value="$(echo "$line" | cut -d'=' -f2-)"
+        value="$(echo "$value" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+
+        # Parse module.field
+        local module field
+        module="$(echo "$key" | cut -d'.' -f1)"
+        field="$(echo "$key" | cut -d'.' -f2)"
+
+        [[ -n "$module" ]] && [[ -n "$field" ]] || continue
+
+        # Find the module in our schedule arrays
+        local found=false
+        for i in "${!SCHED_MODULES[@]}"; do
+            if [[ "${SCHED_MODULES[$i]}" == "$module" ]]; then
+                case "$field" in
+                    interval)
+                        if [[ "$value" =~ ^[0-9]+$ ]]; then
+                            SCHED_INTERVALS[$i]="$value"
+                            secy_log "patrol" "Override: ${module}.interval=${value}"
+                        fi
+                        ;;
+                    priority)
+                        if [[ "$value" =~ ^(high|medium|low)$ ]]; then
+                            SCHED_PRIORITIES[$i]="$value"
+                            secy_log "patrol" "Override: ${module}.priority=${value}"
+                        fi
+                        ;;
+                esac
+                found=true
+                break
+            fi
+        done
+
+        if [[ "$found" != "true" ]]; then
+            secy_log "patrol" "WARNING: Override for unknown module '${module}' — ignoring"
+        fi
+    done < "$file"
+}
+
+_process_directive_files() {
+    [[ -d "$PATROL_DIRECTIVES_DIR" ]] || return 0
+
+    for dfile in "${PATROL_DIRECTIVES_DIR}"/*.directive; do
+        [[ -f "$dfile" ]] || continue
+
+        local basename
+        basename="$(basename "$dfile")"
+        secy_log "patrol" "Processing directive: ${basename}"
+
+        # Capture what we're about to apply
+        local applied_changes=""
+        local apply_errors=""
+
+        while IFS= read -r line; do
+            [[ "$line" =~ ^[[:space:]]*# ]] && continue
+            [[ -z "${line// /}" ]] && continue
+
+            local key value
+            key="$(echo "$line" | cut -d'=' -f1 | tr -d '[:space:]')"
+            value="$(echo "$line" | cut -d'=' -f2-)"
+            value="$(echo "$value" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+
+            local module field
+            module="$(echo "$key" | cut -d'.' -f1)"
+            field="$(echo "$key" | cut -d'.' -f2)"
+
+            [[ -n "$module" ]] && [[ -n "$field" ]] || continue
+
+            local found=false
+            for i in "${!SCHED_MODULES[@]}"; do
+                if [[ "${SCHED_MODULES[$i]}" == "$module" ]]; then
+                    local old_val=""
+                    case "$field" in
+                        interval)
+                            if [[ "$value" =~ ^[0-9]+$ ]]; then
+                                old_val="${SCHED_INTERVALS[$i]}"
+                                SCHED_INTERVALS[$i]="$value"
+                                applied_changes+="  ${module}.${field}: ${old_val} -> ${value}\n"
+                                secy_log "patrol" "Override: ${module}.interval=${value}"
+                            else
+                                apply_errors+="  ${module}.${field}: invalid value '${value}'\n"
+                            fi
+                            ;;
+                        priority)
+                            if [[ "$value" =~ ^(high|medium|low)$ ]]; then
+                                old_val="${SCHED_PRIORITIES[$i]}"
+                                SCHED_PRIORITIES[$i]="$value"
+                                applied_changes+="  ${module}.${field}: ${old_val} -> ${value}\n"
+                                secy_log "patrol" "Override: ${module}.priority=${value}"
+                            else
+                                apply_errors+="  ${module}.${field}: invalid value '${value}'\n"
+                            fi
+                            ;;
+                        *)
+                            apply_errors+="  ${module}.${field}: unknown field\n"
+                            ;;
+                    esac
+                    found=true
+                    break
+                fi
+            done
+
+            if [[ "$found" != "true" ]]; then
+                apply_errors+="  ${module}.${field}: unknown module\n"
+                secy_log "patrol" "WARNING: Override for unknown module '${module}' — ignoring"
+            fi
+        done < "$dfile"
+
+        # Move to applied/
+        mkdir -p "$PATROL_DIRECTIVES_APPLIED"
+        mv "$dfile" "${PATROL_DIRECTIVES_APPLIED}/${basename}" 2>/dev/null || true
+
+        # Write application report
+        {
+            echo "# Directive Application Report"
+            echo ""
+            echo "- **Directive**: ${basename}"
+            echo "- **Service**: patrol"
+            echo "- **Timestamp**: $(date -Iseconds)"
+            echo "- **Status**: $(if [[ -n "$apply_errors" ]]; then echo "partial"; else echo "applied"; fi)"
+            echo ""
+            if [[ -n "$applied_changes" ]]; then
+                echo "## Changes Applied"
+                echo ""
+                printf "%b" "$applied_changes"
+                echo ""
+            fi
+            if [[ -n "$apply_errors" ]]; then
+                echo "## Errors"
+                echo ""
+                printf "%b" "$apply_errors"
+                echo ""
+            fi
+            if [[ -z "$applied_changes" ]] && [[ -z "$apply_errors" ]]; then
+                echo "## Result"
+                echo ""
+                echo "  No actionable entries found in directive."
+                echo ""
+            fi
+        } > "${PATROL_DIRECTIVES_APPLIED}/${basename}.report"
+
+        secy_log "patrol" "Directive applied: ${basename} (report written)"
+    done
 }

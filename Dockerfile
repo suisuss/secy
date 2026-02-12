@@ -28,6 +28,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     jq \
     binutils \
     poppler-utils \
+    inotify-tools \
     && rm -rf /var/lib/apt/lists/*
 
 # Node.js runtime + globally-installed CLI tools from build stage
@@ -50,7 +51,7 @@ RUN mkdir -p /usr/local/lib/sread/data \
 
 # Install agent
 COPY agent/ /opt/secy/
-RUN chmod +x /opt/secy/secy.sh /opt/secy/entrypoint.sh /opt/secy/watch.sh /opt/secy/patrol.sh
+RUN chmod +x /opt/secy/secy.sh /opt/secy/entrypoint.sh /opt/secy/watch.sh /opt/secy/patrol.sh /opt/secy/c2.sh
 
 # srt settings — staged outside /root (which is a tmpfs at runtime).
 # entrypoint.sh copies this into place.

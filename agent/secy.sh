@@ -28,6 +28,7 @@ usage() {
     echo "  monitor     Compare current state against baseline, flag deviations"
     echo "  watch       Continuously monitor Downloads for malware (daemon)"
     echo "  patrol      Persistent security monitoring — scheduled scans + AI review (daemon)"
+    echo "  c2          Supervisory correlation daemon — cross-service analysis (daemon)"
     echo ""
     echo "Watch options:"
     echo "  watch --no-claude        Hash-check only, skip AI analysis"
@@ -37,6 +38,11 @@ usage() {
     echo "  patrol --no-claude          Run modules and diff only, skip AI review"
     echo "  patrol --tick-interval N    Main loop tick in seconds (default: 10)"
     echo "  patrol --review-interval N  Claude review interval in seconds (default: 1800)"
+    echo ""
+    echo "C2 options:"
+    echo "  c2 --no-claude        Log findings but skip Claude analysis"
+    echo "  c2 --poll-interval N  Override poll interval (default: 30s)"
+    echo "  c2 --debounce N       Override debounce interval (default: 300s)"
     echo ""
     echo "State directory: ${STATE_DIR}"
     echo "Agent prompt:    ${AGENT_DIR}/AGENT.md"
@@ -155,6 +161,10 @@ fi
 
 if [[ "$1" == "patrol" ]]; then
     exec "${AGENT_DIR}/patrol.sh" "${@:2}"
+fi
+
+if [[ "$1" == "c2" ]]; then
+    exec "${AGENT_DIR}/c2.sh" "${@:2}"
 fi
 
 run_agent "$1"

@@ -1,3 +1,7 @@
 # Runtime state (baselines, findings, progress, locks)
 state/
+
+# Issues — bind-mounted from host, runtime output
+issues/
+
 .env

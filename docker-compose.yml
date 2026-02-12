@@ -10,8 +10,14 @@ services:
       # - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
 
     volumes:
-      # Persist findings across container runs
-      - ./state:/var/lib/secy/state
+      # Internal state — named volume shared between all secy services.
+      # Contains findings, directives, patrol runs, watch queue, c2 progress.
+      # Not directly visible on host — use 'docker compose exec' to inspect.
+      - secy-state:/var/lib/secy/state
+
+      # Issues — bind-mounted to host so the user can review and delete.
+      # This is the only human-facing output directory.
+      - ./issues:/var/lib/secy/state/issues
 
       # Host filesystem mounted read-only at /host
       - /:/host:ro
@@ -27,7 +33,7 @@ services:
     #   - Host filesystem is read-only (/host:ro)
     #   - Container runs as root (needed for full host file access)
     #   - IS_SANDBOX=1 tells Claude Code it's in a managed sandbox
-    #   - Writes only to state volume and tmpfs
+    #   - Writes only to state volume, issues bind mount, and tmpfs
     #
     # Layer 2: Anthropic sandbox-runtime (srt) — if bwrap works in container
     #   - Network: only api.anthropic.com (no data exfiltration)
@@ -70,7 +76,8 @@ services:
       # - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
 
     volumes:
-      - ./state:/var/lib/secy/state
+      - secy-state:/var/lib/secy/state
+      - ./issues:/var/lib/secy/state/issues
       - /:/host:ro
       - ${HOME}/.claude/.credentials.json:/mnt/claude-credentials.json:ro
 
@@ -106,7 +113,45 @@ services:
       # - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
 
     volumes:
-      - ./state:/var/lib/secy/state
+      - secy-state:/var/lib/secy/state
+      - ./issues:/var/lib/secy/state/issues
+      - /:/host:ro
+      - ${HOME}/.claude/.credentials.json:/mnt/claude-credentials.json:ro
+
+    read_only: true
+
+    cap_drop:
+      - ALL
+    cap_add:
+      - DAC_READ_SEARCH
+      - SYS_ADMIN
+      - NET_ADMIN
+
+    tmpfs:
+      - /tmp:size=64m
+      - /root:size=64m
+
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=unconfined
+
+  # C2 supervisory daemon — correlates findings across watch + patrol
+  secy-c2:
+    build: .
+    image: secy
+
+    command: ["c2"]
+    restart: unless-stopped
+
+    environment:
+      - SREAD_ROOT=/usr/local/lib/sread
+      - SECY_STATE_DIR=/var/lib/secy/state
+      # Uncomment for API key auth (pay-per-use) instead of OAuth
+      # - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+
+    volumes:
+      - secy-state:/var/lib/secy/state
+      - ./issues:/var/lib/secy/state/issues
       - /:/host:ro
       - ${HOME}/.claude/.credentials.json:/mnt/claude-credentials.json:ro
 
@@ -159,7 +204,7 @@ services:
       - SREAD_ROOT=/usr/local/lib/sread
     volumes:
       - threatlab-fs:/host:ro
-      - ./state:/var/lib/secy/state
+      - secy-state:/var/lib/secy/state
       - ./threatlab/run-tests.sh:/opt/threatlab/run-tests.sh:ro
     depends_on:
       threatlab:
@@ -168,4 +213,5 @@ services:
     profiles: ["test"]
 
 volumes:
+  secy-state:
   threatlab-fs:

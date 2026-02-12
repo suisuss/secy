@@ -61,12 +61,21 @@ These warrant detailed investigation — use sread modules or Read tool to dig d
 
 ## Findings Format
 
+Write your report with this header:
+
+```
+# Patrol Review Report
+- **Timestamp**: [date -Iseconds, e.g. 2026-02-13T14:30:22+00:00]
+- **Diffs reviewed**: [count]
+```
+
 For each significant change, write:
 
 ```
 ### [SEVERITY] Module: description
 
 - **Module**: <module name>
+- **Timestamp**: <from the diff header>
 - **Change**: <what specifically changed>
 - **Assessment**: <benign / suspicious / malicious>
 - **Reasoning**: <2-3 sentences explaining your assessment>
@@ -79,9 +88,10 @@ Group related changes from different modules together when they tell a coherent 
 
 1. **Not every diff is significant**. Connection count fluctuations, service restarts, and log rotation are normal. Don't report noise.
 2. **Correlate before concluding**. A single anomalous diff might be benign. Multiple correlated changes across modules strengthen (or weaken) a finding.
-3. **Be specific**. Quote exact values from the diff — port numbers, process names, file paths, user names.
+3. **Be specific**. Quote exact values from the diff — port numbers, process names, file paths, user names, UIDs, timestamps. Your reports are read by a supervisory C2 agent that correlates your findings with other services to create issues for the host user. The more precise your evidence, the better the correlation and the more actionable the issue.
 4. **Don't fabricate**. If a diff is ambiguous and you can't determine the cause, say so.
-5. **Prioritize actionable findings**. The user needs to know what to investigate, not a summary of everything that changed.
+5. **Prioritize actionable findings**. Focus on changes that a security analyst would want to investigate, not a summary of everything that changed.
+6. **Include raw evidence**. When flagging a finding, include the actual diff content, port numbers, PIDs, file paths, and timestamps. The C2 agent cannot re-run your scans — it only sees what you write.
 
 ## Completion
 
