@@ -146,6 +146,12 @@ The agent reads host files and analyzes:
 | SUID | `find -perm -4000` | GTFOBins candidates, SUID outside standard locations |
 | World-writable | `find -perm -0002` | Writable files in /etc, writable executables, writable root-owned files |
 | Services | `/etc/systemd/system/*` | Insecure legacy services, missing hardening directives |
+| Surveillance processes | `/proc/*/cmdline`, `/proc/*/status` | Keyloggers, screen recorders, RATs, ptrace attachments, `/dev/input` readers |
+| Library injection | `/etc/ld.so.preload`, `/proc/*/environ` | LD_PRELOAD hijacking, suspicious shared libraries, shell profile hooks |
+| Kernel modules | `/proc/modules`, `/sys/module/*/taint` | Suspicious module names, unsigned/out-of-tree modules |
+| Autostart persistence | `/etc/xdg/autostart/*`, `~/.config/autostart/*` | Unexpected XDG autostart entries, systemd user services, rc.local, non-package init.d scripts |
+| Network connections | `/proc/net/tcp` (established) | Suspicious outbound connections, process attribution, unusual remote ports |
+| Desktop surveillance | GNOME extensions, browser extensions, dconf | Remote desktop, screen sharing, unknown browser extensions |
 
 ## Output
 
