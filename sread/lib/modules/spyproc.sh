@@ -57,24 +57,24 @@ run() {
     local deleted=0
     local memfd=0
     for pid_dir in "${proc}"/[0-9]*; do
-        # Skip kernel threads (empty cmdline)
-        [[ -s "${pid_dir}/cmdline" ]] || continue
+        # Skip kernel threads (no cmdline)
+        [[ -f "${pid_dir}/cmdline" ]] || continue
         local exe
         exe="$(readlink "${pid_dir}/exe" 2>/dev/null)" || continue
 
         local pid comm
-        if [[ "$exe" == *" (deleted)" ]]; then
-            pid="$(basename "$pid_dir")"
-            comm="$(cat "${pid_dir}/comm" 2>/dev/null || echo "?")"
-            echo "  [!] PID ${pid} (${comm}) exe points to deleted binary"
-            echo "      ${exe}"
-            deleted=$((deleted + 1))
-        elif [[ "$exe" == /memfd:* ]]; then
+        if [[ "$exe" == /memfd:* ]]; then
             pid="$(basename "$pid_dir")"
             comm="$(cat "${pid_dir}/comm" 2>/dev/null || echo "?")"
             echo "  [!] PID ${pid} (${comm}) running from memfd (memory-only execution)"
             echo "      ${exe}"
             memfd=$((memfd + 1))
+        elif [[ "$exe" == *" (deleted)" ]]; then
+            pid="$(basename "$pid_dir")"
+            comm="$(cat "${pid_dir}/comm" 2>/dev/null || echo "?")"
+            echo "  [!] PID ${pid} (${comm}) exe points to deleted binary"
+            echo "      ${exe}"
+            deleted=$((deleted + 1))
         fi
     done
     [[ $((deleted + memfd)) -eq 0 ]] && echo "  (none detected)"
@@ -92,7 +92,7 @@ run() {
     local spoofed=0
     local interpreters="^(bash|sh|dash|zsh|fish|python[0-9.]*|perl[0-9.]*|ruby[0-9.]*|node|java|php[0-9.-]*|Rscript|lua[0-9.]*)$"
     for pid_dir in "${proc}"/[0-9]*; do
-        [[ -s "${pid_dir}/cmdline" ]] || continue
+        [[ -f "${pid_dir}/cmdline" ]] || continue
         local exe
         exe="$(readlink "${pid_dir}/exe" 2>/dev/null)" || continue
         # Already flagged by deleted-binary check
@@ -151,7 +151,6 @@ run() {
         pid="$(basename "$pid_dir")"
         # Skip kernel threads
         [[ -f "${pid_dir}/cmdline" ]] || continue
-        [[ -s "${pid_dir}/cmdline" ]] || continue
 
         local has_input=false
         for fd in "${pid_dir}"/fd/*; do
