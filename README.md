@@ -82,6 +82,12 @@ docker compose up -d secy-watch
 # Watch without AI analysis (hash-check only)
 docker compose run secy watch --no-claude
 
+# Persistent security monitoring — scheduled module scans + AI review
+docker compose up -d secy-patrol
+
+# Patrol without AI review (module scans and diffs only)
+docker compose run secy patrol --no-claude
+
 # Clean up orphan containers from previous runs
 docker compose run --remove-orphans secy audit
 ```
@@ -136,6 +142,7 @@ cat /root/.claude/debug/latest 2>/dev/null
 | `audit` | Full security sweep — reads system files, analyzes for anomalies, produces findings report with explanations and recommendations | Up to 3 |
 | `monitor` | Compares current state against baseline, flags deviations | Up to 2 |
 | `watch` | Continuously monitors Downloads for new files — checks hashes against malware DB, triggers Claude triage for unknown analyzable files | Daemon (runs indefinitely) |
+| `patrol` | Persistent security monitoring — runs sread modules on a schedule, diffs output between runs, invokes secy to review meaningful changes | Daemon (runs indefinitely) |
 
 ## Watch mode
 
@@ -160,6 +167,28 @@ docker compose down secy-watch
 ```
 
 Alerts and triage reports are written to `./state/findings/`. The hash database is baked at Docker build time — rebuild the image to refresh it (recommend daily cron for production).
+
+## Patrol mode
+
+Patrol mode is a persistent daemon that continuously runs sread modules on configurable schedules, detects changes between runs, and periodically invokes secy to review meaningful diffs.
+
+Each module runs at its own interval (e.g., `ports` every 5 minutes, `pkgverify` every hour). Output is diffed against the previous run. When non-empty diffs accumulate — especially from high-priority modules — Claude is invoked to assess what changed and whether it's benign or suspicious.
+
+```bash
+# Run as background daemon
+docker compose up -d secy-patrol
+
+# Run interactively (module scans only, no AI review)
+docker compose run secy patrol --no-claude
+
+# Custom intervals
+docker compose run secy patrol --tick-interval 5 --review-interval 900
+
+# Stop the daemon
+docker compose down secy-patrol
+```
+
+Module schedules are configurable via `state/patrol/schedule.conf` (created on first run with defaults). State persists across restarts in `./state/patrol/`.
 
 ## What it checks
 
@@ -220,45 +249,55 @@ See [docs/sandboxing.md](docs/sandboxing.md) for the full threat model.
 ```
 secy/
 ├── agent/
-│   ├── secy.sh                    # Outer loop (Ralph pattern) + watch dispatch
+│   ├── secy.sh                    # Entry point — mode dispatch (Ralph loop + daemon exec)
 │   ├── watch.sh                   # Watch daemon — Downloads monitoring loop
-│   ├── AGENT.md                   # Agent prompt — security domain knowledge
-│   ├── WATCH.md                   # Agent prompt — malware triage for watch mode
+│   ├── patrol.sh                  # Patrol daemon — scheduled module scans + AI review
+│   ├── entrypoint.sh              # Docker entrypoint (tmpfs setup, credential copy)
+│   ├── AGENT.md                   # System prompt — security audit domain knowledge
+│   ├── WATCH.md                   # System prompt — malware triage for watch mode
+│   ├── PATROL.md                  # System prompt — diff review for patrol mode
 │   ├── conf/
-│   │   ├── agent.conf             # Iteration limits, model, watch settings
+│   │   ├── agent.conf             # All mode settings (iterations, watch, patrol)
 │   │   └── srt-settings.json     # Anthropic sandbox-runtime config
 │   └── lib/
-│       ├── agent-common.sh        # Lock, preflight, prompt assembly
-│       ├── watch-common.sh        # Watch daemon utilities (seen.db, queue, classify)
+│       ├── agent-common.sh        # Lock, preflight, prompt assembly (audit/baseline/monitor)
+│       ├── watch-common.sh        # Watch utilities (seen.db, queue, classify, alerts)
+│       ├── patrol-common.sh       # Patrol utilities (scheduling, module runs, diff, review)
 │       └── format-stream.sh       # Stream-JSON formatter for activity log
-├── sread/                             # Restricted read tool (blocklist + redaction)
+├── sread/                             # Restricted audit tool (25 modules)
 │   ├── bin/
-│   │   └── sread                      # Main binary
+│   │   └── sread                      # Main binary (dispatch, arg validation, audit log)
 │   ├── lib/
-│   │   ├── common.sh                  # Shared utilities
+│   │   ├── common.sh                  # Shared utilities (logging, colors, require_root)
 │   │   ├── redact.sh                  # Output redaction engine
-│   │   ├── blocklist.sh              # Path blocking, MIME checking
-│   │   └── modules/                   # Audit modules (files, ports, users, ...)
-│   ├── data/                          # Baked-in data (malware hash DB)
+│   │   ├── blocklist.sh              # Path blocking, MIME checking, symlink resolution
+│   │   └── modules/                   # 25 audit modules
+│   ├── data/                          # Baked-in data (malware hash DB at build time)
 │   ├── conf/
-│   │   ├── blocked_paths              # Credential file patterns
+│   │   ├── blocked_paths              # Credential file patterns (~250 rules)
 │   │   ├── allowed_mimetypes          # MIME type whitelist
 │   │   ├── redact_patterns            # Output redaction regexes
 │   │   └── sread.sudoers              # sudoers drop-in (for non-Docker use)
 │   ├── tests/                         # Unit + integration tests
 │   └── install.sh                     # sread standalone install
 ├── docs/
-│   ├── DESIGN.md                  # sread threat model
-│   ├── sandboxing.md              # Security architecture
-│   ├── sandboxing-audit.md        # Sandboxing audit findings
-│   ├── shift.md                   # Design decisions
-│   └── ai-agent-landscape.md     # Analysis of Ralph, OpenClaw
+│   └── plans/                     # Design documents
+│       ├── sread.md               # sread architecture and threat model
+│       ├── sandboxing.md          # Security architecture and sandbox layers
+│       ├── watch-mode.md          # Watch mode design
+│       ├── patrol-mode.md         # Patrol mode design
+│       ├── threatlab.md           # Threat lab test container design
+│       └── everything-is-a-file.md  # File-reading vs command-execution rationale
 ├── state/                         # Runtime (gitignored)
-│   ├── baseline/                  # Module output snapshots
+│   ├── baseline/                  # Baseline snapshots
 │   ├── current/                   # Latest run outputs
-│   └── findings/                  # Timestamped reports
+│   ├── findings/                  # Timestamped reports and alerts
+│   ├── watch/                     # Watch daemon state (seen.db, queue, log)
+│   └── patrol/                    # Patrol daemon state (runs, diffs, schedule, log)
+├── THREATS.md                     # Threat detection index (51 techniques, coverage map)
 ├── Dockerfile
 ├── docker-compose.yml
+├── .env.example                   # API key config template
 └── .gitignore
 ```
 
@@ -295,6 +334,11 @@ WATCH_POLL_INTERVAL=5       # Seconds between scan cycles
 WATCH_BATCH_SIZE=10         # Max files per Claude triage batch
 WATCH_MAX_FILE_SIZE=52428800  # Skip files >50MB
 WATCH_SCAN_DEPTH=1          # Don't recurse into subdirs
+
+# Patrol mode
+PATROL_TICK_INTERVAL=10          # Main loop tick (seconds)
+PATROL_REVIEW_INTERVAL=1800     # Claude review interval (seconds, 30 min)
+PATROL_REVIEW_BUDGET_USD="0.50" # Budget per Claude review invocation
 ```
 
 ### Sandbox settings (`agent/conf/srt-settings.json`)
@@ -311,8 +355,10 @@ Prototype. Not audited for production use. Redaction patterns and blocklists are
 
 ## Docs
 
-- [docs/sandboxing.md](docs/sandboxing.md) — Security architecture and threat model
-- [docs/shift.md](docs/shift.md) — Design decision: file reading vs command execution
-- [docs/ai-agent-landscape.md](docs/ai-agent-landscape.md) — Analysis of Ralph, Ralph Playbook, OpenClaw
-- [docs/sandboxing-audit.md](docs/sandboxing-audit.md) — Sandboxing audit findings
-- [docs/DESIGN.md](docs/DESIGN.md) — sread threat model and trust assumptions
+- [docs/plans/sread.md](docs/plans/sread.md) — sread architecture, threat model, and module inventory
+- [docs/plans/sandboxing.md](docs/plans/sandboxing.md) — Security architecture and sandbox layers
+- [docs/plans/everything-is-a-file.md](docs/plans/everything-is-a-file.md) — Design decision: file reading vs command execution
+- [docs/plans/watch-mode.md](docs/plans/watch-mode.md) — Watch mode design
+- [docs/plans/patrol-mode.md](docs/plans/patrol-mode.md) — Patrol mode design
+- [docs/plans/threatlab.md](docs/plans/threatlab.md) — Threat lab test container design
+- [THREATS.md](THREATS.md) — Threat detection index (51 techniques, coverage map)
