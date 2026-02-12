@@ -234,6 +234,53 @@ run() {
     [[ $input_readers -eq 0 ]] && echo "  (none detected — only expected display servers hold input fds)"
     echo ""
 
+    # ── PID namespace anomalies ────────────────────────────────────
+    # Processes in a non-default PID namespace may be hiding from
+    # standard process enumeration. Container runtimes legitimately
+    # create new PID namespaces; anything else is suspicious.
+    echo "--- PID namespace anomalies ---"
+    local ns_anomalies=0
+    local pid1_ns=""
+    if [[ -e "${proc}/1/ns/pid" ]]; then
+        pid1_ns="$(readlink "${proc}/1/ns/pid" 2>/dev/null)" || pid1_ns=""
+    fi
+    local container_runtimes="^(containerd|dockerd|runc|crun|podman|lxc-start|containerd-shim|conmon|docker-init|lxd|lxcfs|snapd)$"
+    if [[ -n "$pid1_ns" ]]; then
+        for pid_dir in "${proc}"/[0-9]*; do
+            [[ -e "${pid_dir}/ns/pid" ]] || continue
+            local pid_ns
+            pid_ns="$(readlink "${pid_dir}/ns/pid" 2>/dev/null)" || continue
+            [[ "$pid_ns" == "$pid1_ns" ]] && continue
+
+            local pid comm
+            pid="$(basename "$pid_dir")"
+            comm="$(cat "${pid_dir}/comm" 2>/dev/null || echo "?")"
+
+            # Check if this is a container runtime process
+            if echo "$comm" | grep -qiE "$container_runtimes"; then
+                continue
+            fi
+
+            # Check parent — if parent is a container runtime, skip
+            local ppid
+            ppid="$(grep '^PPid:' "${pid_dir}/status" 2>/dev/null | awk '{print $2}')" || continue
+            if [[ -n "$ppid" ]] && [[ -f "${proc}/${ppid}/comm" ]]; then
+                local parent_comm
+                parent_comm="$(cat "${proc}/${ppid}/comm" 2>/dev/null || echo "")"
+                if echo "$parent_comm" | grep -qiE "$container_runtimes"; then
+                    continue
+                fi
+            fi
+
+            echo "  [!] PID ${pid} (${comm}) in non-default PID namespace: ${pid_ns}"
+            ns_anomalies=$((ns_anomalies + 1))
+        done
+        [[ $ns_anomalies -eq 0 ]] && echo "  (none detected — all processes in default namespace or belong to container runtimes)"
+    else
+        echo "  (cannot read PID 1 namespace — skipped)"
+    fi
+    echo ""
+
     # ── Deep scan: all processes with open network sockets ───────────
     if $deep; then
         echo "--- Deep: processes with raw/packet sockets ---"
@@ -264,5 +311,5 @@ run() {
     fi
 
     echo ""
-    log_ok "Process scan complete (found: ${found} suspicious, ${deleted} deleted-exe, ${memfd} memfd, ${spoofed} spoofed, ${traced} traced, ${injected_threads} injected-threads, ${input_readers} input readers)"
+    log_ok "Process scan complete (found: ${found} suspicious, ${deleted} deleted-exe, ${memfd} memfd, ${spoofed} spoofed, ${traced} traced, ${injected_threads} injected-threads, ${input_readers} input readers, ${ns_anomalies} ns-anomalies)"
 }
