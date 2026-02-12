@@ -136,10 +136,11 @@ scan_downloads() {
 
             # Compute SHA256
             local hash
-            hash="$(sha256sum "$filepath" 2>/dev/null | awk '{print $1}')" || {
-                secy_log "watch" "WARNING: Failed to hash ${filepath}"
+            hash="$(sha256sum "$filepath" 2>/dev/null | awk '{print $1}')"
+            if [[ -z "$hash" ]]; then
+                secy_log "watch" "WARNING: Failed to hash ${filepath} (file may have been removed)"
                 continue
-            }
+            fi
 
             # Check against malware DB
             local lookup_result=""
@@ -156,6 +157,13 @@ scan_downloads() {
 
             # Mark as seen
             mark_file_seen "$hash" "$filesize" "$filepath"
+
+            # Re-check file exists before classification (file may have been
+            # deleted/renamed between hashing and here)
+            if [[ ! -f "$filepath" ]]; then
+                secy_log "watch" "File disappeared after hash: ${filepath}"
+                continue
+            fi
 
             # Classify file for analysis
             local classification
