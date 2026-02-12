@@ -142,6 +142,61 @@ run() {
     [[ $traced -eq 0 ]] && echo "  (none detected)"
     echo ""
 
+    # ── Thread comm mismatch (thread injection) ────────────────────
+    # When code is injected into a process via thread creation, the
+    # injected thread's comm often differs from the main process.
+    # Legitimate multi-threaded apps use known worker thread patterns.
+    echo "--- Thread injection (comm mismatch) ---"
+    local injected_threads=0
+    local thread_allowlist="^(chrome|firefox|Web Content|Privileged Cont|GeckoMain|java|python[0-9.]*|node|gnome-shell|systemd|containerd|dockerd|code|pipewire|pulseaudio|wireplumber|NetworkManager|plasmashell|kwin|Xorg|Xwayland|steam|gameoverlayui)$"
+    local worker_patterns="^(pool-|worker|Timer|Signal|gdbus|gmain|threaded-ml|inotify|ksoftirqd|rcu_|migration|watchdog|kworker|cpuhp|idle|Chrome_|Compositor|AudioThread|GPU |Renderer|Socket|JS |DOM |IPC |StyleThread|ImgDecoder|StreamTrans|TaskController|Cache2|Timer|DNS Res|Breakpad|prof-sampler|SandboxBroker|GMPThread)$"
+    for pid_dir in "${proc}"/[0-9]*; do
+        [[ -d "${pid_dir}/task" ]] || continue
+        # Skip kernel threads
+        [[ -f "${pid_dir}/cmdline" ]] || continue
+        local cmdline_check
+        cmdline_check="$(cat "${pid_dir}/cmdline" 2>/dev/null)" || continue
+        [[ -z "$cmdline_check" ]] && continue
+
+        local main_comm
+        main_comm="$(cat "${pid_dir}/comm" 2>/dev/null)" || continue
+
+        # Skip allowlisted multi-threaded apps
+        if echo "$main_comm" | grep -qiE "$thread_allowlist"; then
+            continue
+        fi
+
+        local pid
+        pid="$(basename "$pid_dir")"
+        local main_trunc="${main_comm:0:15}"
+
+        for task_dir in "${pid_dir}"/task/*/; do
+            [[ -d "$task_dir" ]] || continue
+            local tid
+            tid="$(basename "$task_dir")"
+            # Skip main thread
+            [[ "$tid" == "$pid" ]] && continue
+
+            local thread_comm
+            thread_comm="$(cat "${task_dir}/comm" 2>/dev/null)" || continue
+
+            # Skip known worker patterns
+            if echo "$thread_comm" | grep -qiE "$worker_patterns"; then
+                continue
+            fi
+
+            # Compare thread comm to main comm (truncated to 15 chars)
+            local thread_trunc="${thread_comm:0:15}"
+            if [[ "$thread_trunc" != "$main_trunc" ]]; then
+                echo "  [!] PID ${pid} (${main_comm}): thread ${tid} has comm='${thread_comm}'"
+                injected_threads=$((injected_threads + 1))
+                break  # One finding per process
+            fi
+        done
+    done
+    [[ $injected_threads -eq 0 ]] && echo "  (none detected)"
+    echo ""
+
     # ── /dev/input readers ───────────────────────────────────────────
     echo "--- Processes reading /dev/input (potential keyloggers) ---"
     local input_readers=0
@@ -209,5 +264,5 @@ run() {
     fi
 
     echo ""
-    log_ok "Process scan complete (found: ${found} suspicious, ${deleted} deleted-exe, ${memfd} memfd, ${spoofed} spoofed, ${traced} traced, ${input_readers} input readers)"
+    log_ok "Process scan complete (found: ${found} suspicious, ${deleted} deleted-exe, ${memfd} memfd, ${spoofed} spoofed, ${traced} traced, ${injected_threads} injected-threads, ${input_readers} input readers)"
 }

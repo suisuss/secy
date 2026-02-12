@@ -343,7 +343,7 @@ sread desktop              # Remote desktop, screen recording, browser extension
 sread surveil              # Run all of the above
 ```
 
-**Process scanning** (`sread spyproc`) performs six checks:
+**Process scanning** (`sread spyproc`) performs seven checks:
 
 1. **Known surveillance names** — matches `/host/proc/[pid]/cmdline` against known spyware:
    - **Keyloggers**: logkeys, lkl, pykeylogger, xspy, xkeysnail, screenkey
@@ -361,6 +361,8 @@ sread surveil              # Run all of the above
 5. **Ptrace detection** — reads `/host/proc/[pid]/status` `TracerPid` field. Non-zero means the process is being debugged/traced by another process. Identifies the tracer.
 
 6. **Input device readers** — checks `/host/proc/[pid]/fd/` for symlinks to `/dev/input/*`. Allowlists Xorg, Xwayland, libinput, mutter, gnome-shell. Anything else reading input devices may be a keylogger.
+
+7. **Thread injection** — iterates `/host/proc/[pid]/task/*/comm` and flags threads whose comm differs from the main process. Allowlists known multi-threaded apps (chrome, firefox, java, node, etc.) and common worker thread patterns. Heuristic — may miss sophisticated injection that mimics legitimate thread names.
 
 With `--deep`: also correlates fd socket inodes against `/host/proc/net/raw` and `/host/proc/net/packet` to find processes holding raw or packet sockets (sniffers).
 

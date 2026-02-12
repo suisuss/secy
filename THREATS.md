@@ -39,7 +39,7 @@ Techniques for finding sophisticatedly hidden malicious programs on a Linux syst
 | 2.5 | Deleted binary detection (/proc/[pid]/exe → "(deleted)") | **Y** | `sread spyproc` | Flags processes whose exe symlink points to a deleted file |
 | 2.6 | memfd_create execution (/proc/[pid]/exe → "/memfd:*") | **Y** | `sread spyproc` | Flags memory-only execution via memfd_create |
 | 2.7 | Process name spoofing (comm vs exe vs cmdline mismatch) | **Y** | `sread spyproc` | Compares comm against basename(exe); skips interpreters; 15-char truncation aware |
-| 2.8 | Thread injection (unexpected /proc/[pid]/task/ entries) | **N** | — | Threads that don't match expected behavior of the main binary |
+| 2.8 | Thread injection (unexpected /proc/[pid]/task/ entries) | **P** | `sread spyproc` | Compares thread comm against main process comm; allowlists known multi-threaded apps and worker patterns |
 | 2.9 | PID namespace hiding (/proc/[pid]/ns/pid differs from PID 1) | **N** | — | Processes hiding in non-default namespaces |
 | 2.10 | Process tree / ancestry analysis | **N** | — | Detect anomalous parent→child chains (nginx→bash, cron→curl\|sh); data in /proc/[pid]/status PPid field |
 | 2.11 | Process memory content scanning (/proc/[pid]/mem) | **N** | — | Scan process memory for injected code, IoC strings, shellcode; detects hollowing and reflective injection |
