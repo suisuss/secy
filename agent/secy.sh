@@ -26,6 +26,11 @@ usage() {
     echo "  baseline    Capture current system state as the 'normal' reference"
     echo "  audit       Full security audit — run all modules, analyze, report"
     echo "  monitor     Compare current state against baseline, flag deviations"
+    echo "  watch       Continuously monitor Downloads for malware (daemon)"
+    echo ""
+    echo "Watch options:"
+    echo "  watch --no-claude        Hash-check only, skip AI analysis"
+    echo "  watch --poll-interval N  Override poll interval (default: 5s)"
     echo ""
     echo "State directory: ${STATE_DIR}"
     echo "Agent prompt:    ${AGENT_DIR}/AGENT.md"
@@ -167,6 +172,11 @@ run_agent() {
 if [[ $# -eq 0 ]] || [[ "$1" == "--help" ]] || [[ "$1" == "-h" ]]; then
     usage
     exit 0
+fi
+
+# Watch mode has its own daemon lifecycle — delegate entirely
+if [[ "$1" == "watch" ]]; then
+    exec "${AGENT_DIR}/watch.sh" "${@:2}"
 fi
 
 run_agent "$1"

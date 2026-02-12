@@ -76,6 +76,12 @@ docker compose run secy baseline
 # Compare current state against baseline
 docker compose run secy monitor
 
+# Watch Downloads for malware (runs as daemon)
+docker compose up -d secy-watch
+
+# Watch without AI analysis (hash-check only)
+docker compose run secy watch --no-claude
+
 # Clean up orphan containers from previous runs
 docker compose run --remove-orphans secy audit
 ```
@@ -129,6 +135,31 @@ cat /root/.claude/debug/latest 2>/dev/null
 | `baseline` | Captures current system state as the "normal" reference | 1 |
 | `audit` | Full security sweep — reads system files, analyzes for anomalies, produces findings report with explanations and recommendations | Up to 3 |
 | `monitor` | Compares current state against baseline, flags deviations | Up to 2 |
+| `watch` | Continuously monitors Downloads for new files — checks hashes against malware DB, triggers Claude triage for unknown analyzable files | Daemon (runs indefinitely) |
+
+## Watch mode
+
+Watch mode is a long-lived daemon that monitors `/home/*/Downloads/` for new files. For each new file:
+
+1. **Hash check** — computes SHA256 and checks against MalwareBazaar database (~1.5M known malware hashes, baked in at build time). Known malware triggers an immediate CRITICAL alert.
+2. **Classify** — determines file type via MIME. Media files (images/video/audio) are skipped (hash check still catches them). Scripts, executables, PDFs, office docs, and archives are queued for analysis.
+3. **AI triage** — batches queued files and spawns a Claude instance to assess each as CLEAN, SUSPICIOUS, or MALICIOUS based on metadata, structure, and content indicators.
+
+```bash
+# Run as background daemon
+docker compose up -d secy-watch
+
+# Run interactively (hash-check only, no AI)
+docker compose run secy watch --no-claude
+
+# Custom poll interval
+docker compose run secy watch --poll-interval 10
+
+# Stop the daemon
+docker compose down secy-watch
+```
+
+Alerts and triage reports are written to `./state/findings/`. The hash database is baked at Docker build time — rebuild the image to refresh it (recommend daily cron for production).
 
 ## What it checks
 
@@ -189,13 +220,16 @@ See [docs/sandboxing.md](docs/sandboxing.md) for the full threat model.
 ```
 secy/
 ├── agent/
-│   ├── secy.sh                    # Outer loop (Ralph pattern)
+│   ├── secy.sh                    # Outer loop (Ralph pattern) + watch dispatch
+│   ├── watch.sh                   # Watch daemon — Downloads monitoring loop
 │   ├── AGENT.md                   # Agent prompt — security domain knowledge
+│   ├── WATCH.md                   # Agent prompt — malware triage for watch mode
 │   ├── conf/
-│   │   ├── agent.conf             # Iteration limits, model, settings
+│   │   ├── agent.conf             # Iteration limits, model, watch settings
 │   │   └── srt-settings.json     # Anthropic sandbox-runtime config
 │   └── lib/
 │       ├── agent-common.sh        # Lock, preflight, prompt assembly
+│       ├── watch-common.sh        # Watch daemon utilities (seen.db, queue, classify)
 │       └── format-stream.sh       # Stream-JSON formatter for activity log
 ├── sread/                             # Restricted read tool (blocklist + redaction)
 │   ├── bin/
@@ -205,6 +239,7 @@ secy/
 │   │   ├── redact.sh                  # Output redaction engine
 │   │   ├── blocklist.sh              # Path blocking, MIME checking
 │   │   └── modules/                   # Audit modules (files, ports, users, ...)
+│   ├── data/                          # Baked-in data (malware hash DB)
 │   ├── conf/
 │   │   ├── blocked_paths              # Credential file patterns
 │   │   ├── allowed_mimetypes          # MIME type whitelist
@@ -254,6 +289,12 @@ MONITOR_MAX_ITERATIONS=2    # Max iterations for monitor mode
 BASELINE_MAX_ITERATIONS=1   # Max iterations for baseline capture
 CLAUDE_MODEL="sonnet"       # Claude model to use
 MAX_BUDGET_USD="1.00"       # Spend cap per iteration
+
+# Watch mode
+WATCH_POLL_INTERVAL=5       # Seconds between scan cycles
+WATCH_BATCH_SIZE=10         # Max files per Claude triage batch
+WATCH_MAX_FILE_SIZE=52428800  # Skip files >50MB
+WATCH_SCAN_DEPTH=1          # Don't recurse into subdirs
 ```
 
 ### Sandbox settings (`agent/conf/srt-settings.json`)

@@ -126,6 +126,27 @@ sread tamper               # Detect backdated system binaries (ctime vs mtime)
 sread tamper --threshold 72  # Custom threshold in hours (default: 48)
 ```
 
+**File hashing and malware lookup:**
+
+```bash
+# Compute SHA256 hash of a file
+sread hash /host/home/user/Downloads/suspicious.bin
+sread hash --md5 /host/home/user/Downloads/suspicious.bin
+
+# Extract file metadata without reading content
+sread fileinfo /host/home/user/Downloads/suspicious.bin
+# Shows: stat, MIME, magic, SHA256, entropy, type-specific analysis
+#   ELF: readelf headers
+#   PDF: pdfinfo + risk indicators (/JavaScript, /OpenAction, etc.)
+#   Archives: content listing (first 50 entries)
+#   Other: strings preview
+
+# Look up a hash against the local malware database (MalwareBazaar)
+sread hashlookup abc123...def   # Direct hash lookup
+sread hashlookup --file /host/home/user/Downloads/suspicious.bin  # Hash and lookup
+# Output: [MATCH] = known malware, [CLEAN] = not in DB, [NO_DB] = DB missing
+```
+
 For standard system files without secrets (`/etc/passwd`, `/etc/ssh/sshd_config`, `/proc/net/tcp`, log files), use the Read or Grep tool directly — sread is not needed.
 
 ## What to Read (Reference Table)
