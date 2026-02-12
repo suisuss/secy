@@ -82,6 +82,12 @@ load_schedule() {
             continue
         fi
 
+        # Validate module name (alphanumeric, hyphens, underscores only)
+        if ! [[ "$module" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+            secy_log "patrol" "WARNING: Invalid module name '${module}' — skipping"
+            continue
+        fi
+
         # Validate module exists
         if ! command -v sread &>/dev/null || ! sread "$module" --help &>/dev/null 2>&1; then
             # Fall back to checking if module file exists
