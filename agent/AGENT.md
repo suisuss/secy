@@ -98,19 +98,61 @@ date -Iseconds                                           # Current timestamp
 
 **Do NOT run:** `curl`, `wget`, `nc`, `ssh`, `apt`, `pip`, or any network command — they will fail (network is sandboxed). **Do NOT run:** `ss`, `systemctl`, `iptables`, `sysctl`, `journalctl` — they show container state, not host state. Read the equivalent files instead.
 
-### sread (for redacted config reads)
+### sread (audit modules and redacted config reads)
 
-Use `sread files <path>` when reading config files that likely contain passwords, connection strings, or API keys:
+sread provides specialized audit modules and safe config file reads. Use it for targeted scans that aggregate data from multiple files into a single analysis:
 
 ```bash
+# Redacted config reads (strips passwords, tokens, keys → <REDACTED>)
 sread files /host/etc/mysql/my.cnf
 sread files /host/etc/postgresql/pg_hba.conf
-sread files /host/etc/redis/redis.conf
+
+# Surveillance sweep (runs all surveillance modules)
+sread surveil
+
+# Individual surveillance modules
+sread spyproc              # Known spyware, deleted binaries, memfd, name spoofing, ptrace, /dev/input
+sread spyproc --deep       # Also check raw/packet sockets
+sread preload              # LD_PRELOAD hijacking, shell hooks, PAM modules
+sread kmod                 # Suspicious/unsigned modules, /proc/modules vs /sys/module cross-check, kernel taint
+sread ebpf                 # eBPF programs, security tracepoints, BPF sysctl configuration
+sread autostart            # XDG autostart, systemd user services, rc.local, init.d
+sread netconn              # Established connections with process attribution
+sread desktop              # Remote desktop, screen recording, browser extensions
+sread xattr                # Extended attributes on system binaries and temp dirs
+sread mounts               # Bind mounts, mount overlaps, system directory mount types
+sread dnstun               # DNS tunneling tools, rogue listeners, resolv.conf analysis
+sread firmware             # EFI/UEFI Secure Boot, boot entries, BMC/IPMI presence
+
+# Integrity and tampering
+sread pkgverify            # Verify critical package checksums against dpkg md5sums
+sread pkgverify --all      # Full scan (all packages — slow)
+sread tamper               # Detect backdated system binaries (ctime vs mtime)
+sread tamper --threshold 72  # Custom threshold in hours (default: 48)
 ```
 
-sread strips sensitive values (passwords, tokens, keys) and replaces them with `<REDACTED>`. This is expected behavior, not a finding.
+**File hashing and malware lookup:**
 
-For standard system files without secrets (`/etc/passwd`, `/etc/ssh/sshd_config`, `/proc/net/tcp`, log files), use the Read or Grep tool directly.
+```bash
+# Compute SHA256 hash of a file
+sread hash /host/home/user/Downloads/suspicious.bin
+sread hash --md5 /host/home/user/Downloads/suspicious.bin
+
+# Extract file metadata without reading content
+sread fileinfo /host/home/user/Downloads/suspicious.bin
+# Shows: stat, MIME, magic, SHA256, entropy, type-specific analysis
+#   ELF: readelf headers
+#   PDF: pdfinfo + risk indicators (/JavaScript, /OpenAction, etc.)
+#   Archives: content listing (first 50 entries)
+#   Other: strings preview
+
+# Look up a hash against the local malware database (MalwareBazaar)
+sread hashlookup abc123...def   # Direct hash lookup
+sread hashlookup --file /host/home/user/Downloads/suspicious.bin  # Hash and lookup
+# Output: [MATCH] = known malware, [CLEAN] = not in DB, [NO_DB] = DB missing
+```
+
+For standard system files without secrets (`/etc/passwd`, `/etc/ssh/sshd_config`, `/proc/net/tcp`, log files), use the Read or Grep tool directly — sread is not needed.
 
 ## What to Read (Reference Table)
 
@@ -138,6 +180,29 @@ For standard system files without secrets (`/etc/passwd`, `/etc/ssh/sshd_config`
 | Hosts file | `/host/etc/hosts` |
 | Mounted filesystems | `/host/proc/mounts` |
 | Package database (Debian) | `/host/var/lib/dpkg/status` |
+| Process command lines | `/host/proc/[pid]/cmdline` (NUL-delimited) |
+| Process binary path | `/host/proc/[pid]/exe` (symlink — check for `(deleted)` or `/memfd:`) |
+| Process name (kernel) | `/host/proc/[pid]/comm` (compare against exe for spoofing) |
+| Process environment | `/host/proc/[pid]/environ` (NUL-delimited, root only) |
+| Process tracer status | `/host/proc/[pid]/status` (`TracerPid` field) |
+| Loaded kernel modules | `/host/proc/modules` |
+| Module taint flags | `/host/sys/module/[name]/taint` |
+| Module directories | `/host/sys/module/*/` (cross-check against /proc/modules) |
+| System kernel taint | `/host/proc/sys/kernel/tainted` (bitmask — 0 = clean) |
+| LD_PRELOAD system-wide | `/host/etc/ld.so.preload` |
+| XDG autostart (system) | `/host/etc/xdg/autostart/*.desktop` |
+| XDG autostart (user) | `/host/home/[user]/.config/autostart/*.desktop` |
+| Systemd user units | `/host/home/[user]/.config/systemd/user/*.service` |
+| GNOME extensions (system) | `/host/usr/share/gnome-shell/extensions/` |
+| GNOME extensions (user) | `/host/home/[user]/.local/share/gnome-shell/extensions/` |
+| Browser extensions (Brave) | `/host/home/[user]/.config/BraveSoftware/Brave-Browser/Default/Extensions/` |
+| Browser extensions (Chrome) | `/host/home/[user]/.config/google-chrome/Default/Extensions/` |
+| Browser extensions (Firefox) | `/host/home/[user]/.mozilla/firefox/[profile]/extensions/` |
+| Shell profiles | `/host/home/[user]/.bashrc`, `.zshrc`, `.profile`, `.bash_profile` |
+| rc.local | `/host/etc/rc.local` |
+| PAM modules | `/host/etc/pam.d/*` |
+| Package checksums (Debian) | `/host/var/lib/dpkg/info/*.md5sums` |
+| /dev/shm contents | `/host/dev/shm/` (malware staging area — scan for executables) |
 
 If a file does not exist, note its absence — it may itself be a finding (e.g., no `/host/etc/nftables.conf` and no `/host/etc/iptables/rules.v4` means no persistent firewall rules).
 
@@ -258,6 +323,165 @@ Flag:
 - World-writable files in /var/lib/docker (container escape path)
 - World-writable directories outside /tmp, /var/tmp, /dev/shm
 
+**`/dev/shm` staging scan** — the general world-writable scan above excludes /dev/shm to reduce noise. `sread world` includes a dedicated /dev/shm scan that checks for:
+- Executable files (any file with +x)
+- ELF binaries (even without +x — checks the `\x7fELF` magic bytes)
+- Scripts with shebang lines (even without +x)
+- Hidden dotfiles
+
+`/dev/shm` is a world-writable tmpfs in RAM. Fileless malware frequently stages payloads here because it leaves no disk forensics trace and is rarely monitored.
+
+### Surveillance detection (process + file analysis)
+
+Use `sread` surveillance modules OR read the files directly:
+
+```bash
+sread spyproc              # Full process scan (see below)
+sread spyproc --deep       # Also check raw/packet sockets
+sread preload              # LD_PRELOAD hijacking, shell hooks, PAM modules
+sread kmod                 # Kernel module analysis (see below)
+sread ebpf                 # eBPF programs, security tracepoints, BPF sysctl
+sread autostart            # XDG autostart, systemd user services, rc.local, init.d
+sread netconn              # Established connections with process attribution
+sread desktop              # Remote desktop, screen recording, browser extensions
+sread xattr                # Extended attributes on system binaries and temp dirs
+sread mounts               # Bind mounts, mount overlaps, system directory mount types
+sread dnstun               # DNS tunneling tools, rogue listeners, resolv.conf
+sread surveil              # Run all of the above
+```
+
+**Process scanning** (`sread spyproc`) performs eight checks:
+
+1. **Known surveillance names** — matches `/host/proc/[pid]/cmdline` against known spyware:
+   - **Keyloggers**: logkeys, lkl, pykeylogger, xspy, xkeysnail, screenkey
+   - **Screen recorders**: recordmydesktop, simplescreenrecorder, vokoscreen, kazam, peek, ffmpeg with x11grab
+   - **Remote access**: teamviewer, anydesk, rustdesk, x11vnc, tigervnc, xrdp, vino, chrome-remote-desktop
+   - **Sniffers**: tcpdump, wireshark, tshark, ettercap, bettercap, mitmproxy
+   - **Tracers**: strace, ltrace attached to other processes
+
+2. **Deleted binaries** — reads `/host/proc/[pid]/exe` symlink. A process whose binary has been deleted from disk (`exe` → `(deleted)`) is running orphaned code. Legitimate after package upgrades; otherwise a strong indicator of malware that deletes itself after loading.
+
+3. **memfd execution** — checks `/host/proc/[pid]/exe` for `/memfd:*` targets. `memfd_create()` allows executing code that was never written to disk. Very strong fileless malware indicator.
+
+4. **Process name spoofing** — compares `/host/proc/[pid]/comm` (what the kernel thinks the process is named) against the basename of `/host/proc/[pid]/exe` (the actual binary on disk). A mismatch means the process is disguising its identity. Interpreters (bash, python, etc.) are excluded since they legitimately differ. Accounts for the kernel's 15-character truncation of `comm`.
+
+5. **Ptrace detection** — reads `/host/proc/[pid]/status` `TracerPid` field. Non-zero means the process is being debugged/traced by another process. Identifies the tracer.
+
+6. **Input device readers** — checks `/host/proc/[pid]/fd/` for symlinks to `/dev/input/*`. Allowlists Xorg, Xwayland, libinput, mutter, gnome-shell. Anything else reading input devices may be a keylogger.
+
+7. **Thread injection** — iterates `/host/proc/[pid]/task/*/comm` and flags threads whose comm differs from the main process. Allowlists known multi-threaded apps (chrome, firefox, java, node, etc.) and common worker thread patterns. Heuristic — may miss sophisticated injection that mimics legitimate thread names.
+
+8. **PID namespace anomalies** — compares each process's `/host/proc/[pid]/ns/pid` against PID 1's namespace. Flags processes in non-default namespaces that aren't container runtimes (or children of container runtimes). Detects processes hiding in isolated PID namespaces.
+
+With `--deep`: also correlates fd socket inodes against `/host/proc/net/raw` and `/host/proc/net/packet` to find processes holding raw or packet sockets (sniffers).
+
+**LD_PRELOAD hijacking** (`sread preload`):
+- Check if `/host/etc/ld.so.preload` exists — it should NOT on a normal system. Libraries listed here are injected into every process.
+- Read `/host/proc/[pid]/environ` for any process with `LD_PRELOAD=` set.
+
+**Kernel modules** (`sread kmod`) performs seven checks:
+
+1. **Suspicious names** — reads `/host/proc/modules`, flags modules matching: keylog, spy, hook, rootkit, hide, stealth, sniff, intercept, backdoor.
+
+2. **Out-of-tree / unsigned** — checks `/host/sys/module/[name]/taint` for `O` (out-of-tree) or `E` (unsigned) flags.
+
+3. **Cross-verification** — compares the module list from `/host/proc/modules` against `/host/sys/module/*/`. A rootkit that hooks procfs to hide its module from `/proc/modules` may forget to hide from sysfs (or vice versa). Discrepancies in either direction are a strong rootkit indicator. Filters built-in modules (no `refcnt` file in sysfs) to avoid false positives.
+
+4. **System-wide taint bitmask** — reads `/host/proc/sys/kernel/tainted` and decodes all 18 kernel taint bits (proprietary modules, force-loads, unsigned modules, MCEs, live patches, etc.). A non-zero value means something out-of-ordinary has loaded into the kernel.
+
+5. **Active kprobes** — reads `/host/sys/kernel/debug/kprobes/list`; flags hooks on sensitive kernel functions (`sys_execve`, `sys_open`, `sys_connect`, `vfs_read`, `vfs_write`, `tcp_sendmsg`, `security_*`). Requires debugfs.
+
+6. **Kprobe tracing events** — reads `/host/sys/kernel/debug/tracing/kprobe_events` for dynamically configured kprobe trace points.
+
+7. **DKMS persistence** — enumerates `/host/var/lib/dkms/` for registered third-party modules that auto-rebuild on kernel updates. Allowlists known-legitimate drivers (nvidia, virtualbox, wireguard, zfs, etc.); flags unknown modules.
+
+**eBPF programs** (`sread ebpf`) checks four areas:
+
+1. **Pinned BPF programs** — enumerates `/host/sys/fs/bpf/` for pinned BPF objects that persist beyond process lifetime.
+2. **Loaded programs** — uses `bpftool prog list` (if available) to enumerate all loaded BPF programs; flags security-sensitive types (tracepoint, kprobe, raw_tracepoint, lsm, tracing).
+3. **Active security tracepoints** — reads debugfs tracing events for enabled syscall and security tracepoints.
+4. **BPF sysctl** — checks `bpf_jit_enable` and `unprivileged_bpf_disabled`; flags if unprivileged users can load BPF programs.
+
+**Extended attributes** (`sread xattr`) scans for xattr-based payloads:
+
+1. **Non-standard xattrs on system binaries** — scans `/usr/bin`, `/usr/sbin`, `/bin`, `/sbin` with `getfattr`; allowlists security framework xattrs (SELinux, capabilities, IMA, AppArmor, POSIX ACLs); flags anything else.
+2. **user.* namespace xattrs** — dedicated scan for user-writable xattrs on system binaries (should never exist).
+3. **Temp directory xattrs** — scans `/tmp`, `/dev/shm`, `/var/tmp` for files with non-standard xattrs.
+
+Degrades gracefully if `getfattr` (attr package) is not installed.
+
+**Mount analysis** (`sread mounts`) detects filesystem-level hiding:
+
+1. **Bind mounts** — parses `/host/proc/1/mountinfo` for mounts with root != "/" (bind mount indicator). Flags bind mounts over sensitive system paths (`/usr/bin`, `/usr/sbin`, `/etc`, `/lib`, `/boot`).
+2. **Overlapping mounts** — finds parent-child mount point pairs on the same device, which can shadow directory contents.
+3. **System directory types** — informational summary of filesystem types mounted on system directories.
+
+**DNS tunneling** (`sread dnstun`) detects DNS-based exfiltration:
+
+1. **Tunneling tool processes** — scans cmdline for known DNS tunneling tools (iodine, dns2tcp, dnscat2, dnschef, etc.).
+2. **Rogue DNS listeners** — parses `/host/proc/net/udp` for UDP port 53 listeners; allowlists known resolvers (systemd-resolved, dnsmasq, unbound, etc.); correlates socket inode to PID.
+3. **Suspicious resolv.conf** — flags nameservers not in a known-good list (localhost, Google, Cloudflare, Quad9, OpenDNS).
+4. **Tunneling tools on disk** — checks system binary directories for known tunnel tool binaries.
+
+**Firmware analysis** (`sread firmware`) inspects EFI and hardware management:
+
+1. **UEFI Secure Boot state** — detects UEFI vs Legacy BIOS; reads SecureBoot efivar or mokutil to check if Secure Boot is enabled. Flags if disabled.
+2. **EFI boot entries** — enumerates Boot0* efivars with descriptions; reads BootOrder; flags unusually large variables (>4KB, potential payload storage).
+3. **EFI variable overview** — counts total EFI variables; flags any over 4KB.
+4. **BMC/IPMI presence** — checks `/dev/ipmi0`, IPMI kernel modules in `/proc/modules`, `ipmitool bmc info` if available, and IPMI network interfaces.
+
+Note: firmware analysis is inherently limited from userspace. Cannot verify boot chain integrity or audit BMC firmware.
+
+**Persistence mechanisms**:
+- XDG autostart: `/host/etc/xdg/autostart/*.desktop` and `/host/home/[user]/.config/autostart/*.desktop` — parse `Name=` and `Exec=` fields
+- Systemd user services: `/host/home/[user]/.config/systemd/user/*.service` — check `ExecStart=`
+- rc.local: `/host/etc/rc.local` — should not exist or not be executable on modern systems
+- init.d: cross-reference `/host/etc/init.d/*` against package database
+
+**Shell profile hooks** — Read `/host/home/[user]/.bashrc`, `.zshrc`, `.profile`, `.bash_profile`. Flag:
+- `PROMPT_COMMAND` that calls `curl`, `wget`, or `nc`
+- `trap DEBUG` hooks that exfiltrate data
+- Any reference to keylogging or monitoring
+
+**Browser extensions** — Read `manifest.json` in extension directories. For Chrome/Brave, extensions are at `Extensions/[id]/[version]/manifest.json`. For localized names (`__MSG_...`), check `_locales/en/messages.json`.
+
+**Desktop remote access** — Check for running remote desktop processes and GNOME remote desktop dconf settings.
+
+### Package integrity (`sread pkgverify`)
+
+Verifies installed files against dpkg stored checksums (`/host/var/lib/dpkg/info/*.md5sums`). By default checks security-critical packages only:
+
+- **Core**: base-files, coreutils, bash, dash, util-linux
+- **Auth**: login, passwd, sudo, libpam0g, libpam-modules
+- **Crypto**: openssl, libssl3/libssl1.1, ca-certificates
+- **Network**: openssh-server, openssh-client
+- **Package manager**: apt, dpkg
+- **Init**: systemd
+- **Tools**: grep, findutils, sed, gawk
+
+Use `sread pkgverify --all` for a full scan of all packages.
+
+A modified file means the binary on disk doesn't match what the package manager installed. This catches trojanized system binaries — the most impactful persistence technique since it survives reboots and hides in plain sight.
+
+Missing binaries/libraries are also flagged (config files are excluded since they legitimately diverge via dpkg conffile handling).
+
+If `sread pkgverify` is unavailable or you need to verify manually, read `/host/var/lib/dpkg/info/<package>.md5sums` and compare with `md5sum /host/<path>`.
+
+### Timestamp manipulation (`sread tamper`)
+
+Scans system binary directories (`/usr/bin`, `/usr/sbin`, `/bin`, `/sbin`, `/usr/lib`, `/lib`) for signs of backdating.
+
+**Backdated binaries** — compares `ctime` (inode change time) against `mtime` (content modification time) for each binary. `ctime` cannot be faked without raw disk access; `mtime` can be reset with `touch`. If `ctime` is significantly newer than `mtime` (default threshold: 48 hours), someone likely modified the file then reset its timestamp to hide the change.
+
+**Recently changed system binaries** — flags any system binary with `ctime` in the last 24 hours. System directories rarely change outside package upgrades, so recent inode changes warrant investigation.
+
+Use `sread tamper --threshold 72` to adjust the backdating threshold (in hours).
+
+If `sread tamper` is unavailable, check manually with `stat`:
+```bash
+stat -c '%n mtime=%Y ctime=%Z' /host/usr/bin/* | awk '{split($2,m,"="); split($3,c,"="); if(c[2]-m[2] > 172800) print}'
+```
+
 ### Systemd services (ls + read unit files)
 List: `ls /host/etc/systemd/system/` and `ls /host/usr/lib/systemd/system/`
 
@@ -306,7 +530,7 @@ Write your report as markdown to the path given in your task instructions:
 ```
 # Security Audit Report
 - **Host**: [from /host/etc/hostname]
-- **Date**: [ISO timestamp]
+- **Timestamp**: [date -Iseconds, e.g. 2026-02-13T14:30:22+00:00]
 - **Mode**: [audit|monitor]
 - **OS**: [from /host/etc/os-release PRETTY_NAME]
 - **Kernel**: [from /host/proc/version]
@@ -346,6 +570,17 @@ Write your report as markdown to the path given in your task instructions:
 | SUID binaries | find -perm -4000 | 0 |
 | World-writable | find -perm -0002 | 0 |
 | Systemd services | /etc/systemd/system | 1 info |
+| Surveillance processes | /proc/*/cmdline, exe, comm, status | 0 |
+| Fileless execution | /proc/*/exe (deleted binaries, memfd) | 0 |
+| Process spoofing | /proc/*/comm vs /proc/*/exe | 0 |
+| Library injection | /etc/ld.so.preload, /proc/*/environ | 0 |
+| Kernel modules | /proc/modules, /sys/module, kernel taint | 0 |
+| Autostart persistence | /etc/xdg/autostart, ~/.config/autostart | 0 |
+| Network connections | /proc/net/tcp (established) | 1 info |
+| Desktop surveillance | GNOME extensions, browser extensions | 0 |
+| Package integrity | /var/lib/dpkg/info/*.md5sums | 0 |
+| Timestamp tampering | stat ctime vs mtime on system binaries | 0 |
+| /dev/shm staging | /dev/shm (executables, ELF, scripts) | 0 |
 ```
 
 For **monitor mode**, add after Summary:
@@ -396,6 +631,9 @@ Read these in order:
 10. `/host/etc/crontab` and `ls /host/etc/cron.d/` — scheduled tasks
 11. Check for firewall config: `/host/etc/nftables.conf` or `/host/etc/iptables/rules.v4`
 12. `find /host -perm -4000 -type f 2>/dev/null` — SUID binaries
+13. Surveillance sweep: `sread surveil` — processes (including deleted binaries, memfd, name spoofing), LD_PRELOAD, kernel modules (including cross-verification and taint), autostart, connections, desktop
+14. `sread pkgverify` — check critical package file integrity
+15. `sread tamper` — check for backdated system binaries
 
 Write initial findings to progress file.
 
@@ -407,6 +645,13 @@ Investigate findings from iteration 1:
 - Weak SSH config + many auth failures → quantify the brute force (grep for "Failed password" in auth log)
 - Missing firewall → recommend the operator run `sudo nft list ruleset` to check runtime rules
 - World-writable files and SUID scan if not done in iteration 1
+- Deleted binary / memfd processes → read their `/host/proc/[pid]/maps` to understand what's loaded, check parent process, check if they have network sockets
+- Process name spoofing hits → verify the actual binary at the exe path, check if it's a legitimate multi-call binary or a renamed malware
+- Surveillance findings → investigate flagged processes (read their `/host/proc/[pid]/cmdline`, check parent process, check if they have network sockets)
+- Suspicious kernel modules → investigate taint flags, cross-reference with known legitimate modules, check if /proc/modules and /sys/module are consistent
+- Modified packages → if `sread pkgverify` flagged files, investigate what changed and when (check ctime via `stat`), cross-reference with recent apt/dpkg log entries in `/host/var/log/dpkg.log`
+- Backdated binaries → if `sread tamper` flagged files, check if they were also flagged by pkgverify, investigate the actual content
+- Unexpected browser extensions → read their manifest.json permissions
 
 ### Iteration 3 (audit mode only) — finalize report
 

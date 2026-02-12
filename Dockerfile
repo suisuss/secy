@@ -26,6 +26,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     socat \
     ripgrep \
     jq \
+    binutils \
+    poppler-utils \
+    inotify-tools \
     && rm -rf /var/lib/apt/lists/*
 
 # Node.js runtime + globally-installed CLI tools from build stage
@@ -36,11 +39,19 @@ COPY --from=build /usr/local/lib/node_modules /usr/local/lib/node_modules
 COPY sread/bin/ /usr/local/lib/sread/bin/
 COPY sread/lib/ /usr/local/lib/sread/lib/
 COPY sread/conf/ /usr/local/lib/sread/conf/
+COPY sread/data/ /usr/local/lib/sread/data/
 COPY --from=build /tmp/sread-bin /usr/local/bin/sread
+
+# Build malware hash database (MalwareBazaar SHA256 export, sorted for look(1))
+RUN mkdir -p /usr/local/lib/sread/data \
+    && curl -sSL https://bazaar.abuse.ch/export/txt/sha256/full/ \
+    | grep -E '^[0-9a-f]{64}$' \
+    | sort > /usr/local/lib/sread/data/malware-sha256.txt \
+    && echo "Malware DB: $(wc -l < /usr/local/lib/sread/data/malware-sha256.txt) hashes"
 
 # Install agent
 COPY agent/ /opt/secy/
-RUN chmod +x /opt/secy/secy.sh /opt/secy/entrypoint.sh
+RUN chmod +x /opt/secy/secy.sh /opt/secy/entrypoint.sh /opt/secy/watch.sh /opt/secy/patrol.sh /opt/secy/c2.sh
 
 # srt settings — staged outside /root (which is a tmpfs at runtime).
 # entrypoint.sh copies this into place.

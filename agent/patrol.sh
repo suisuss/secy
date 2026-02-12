@@ -1,0 +1,171 @@
+#!/usr/bin/env bash
+# agent/patrol.sh — Persistent autonomous security monitoring daemon
+#
+# Continuously runs sread modules on a schedule, detects changes between
+# runs, and periodically invokes Claude to review meaningful diffs.
+#
+# Usage:
+#   patrol.sh [--no-claude] [--tick-interval N] [--review-interval N]
+
+set -euo pipefail
+
+AGENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${AGENT_DIR}/lib/patrol-common.sh"
+
+# ── Flag parsing ─────────────────────────────────────────────────
+
+NO_CLAUDE=false
+TICK_OVERRIDE=""
+REVIEW_OVERRIDE=""
+BUDGET_OVERRIDE=""
+
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        --no-claude)
+            NO_CLAUDE=true
+            shift
+            ;;
+        --tick-interval)
+            if [[ $# -lt 2 ]] || ! [[ "$2" =~ ^[0-9]+$ ]]; then
+                echo "ERROR: --tick-interval requires a numeric value" >&2; exit 1
+            fi
+            TICK_OVERRIDE="$2"
+            shift 2
+            ;;
+        --review-interval)
+            if [[ $# -lt 2 ]] || ! [[ "$2" =~ ^[0-9]+$ ]]; then
+                echo "ERROR: --review-interval requires a numeric value" >&2; exit 1
+            fi
+            REVIEW_OVERRIDE="$2"
+            shift 2
+            ;;
+        --review-budget)
+            if [[ $# -lt 2 ]] || ! [[ "$2" =~ ^[0-9]+\.?[0-9]*$ ]]; then
+                echo "ERROR: --review-budget requires a numeric value" >&2; exit 1
+            fi
+            BUDGET_OVERRIDE="$2"
+            shift 2
+            ;;
+        --help|-h)
+            echo "secy patrol — Persistent autonomous security monitoring"
+            echo ""
+            echo "Usage: secy patrol [OPTIONS]"
+            echo ""
+            echo "Options:"
+            echo "  --no-claude           Run modules and diff only, skip Claude review"
+            echo "  --tick-interval N     Main loop tick in seconds (default: ${PATROL_TICK_INTERVAL})"
+            echo "  --review-interval N   Claude review interval in seconds (default: ${PATROL_REVIEW_INTERVAL})"
+            echo "  --review-budget N     Budget per Claude review in USD (default: ${PATROL_REVIEW_BUDGET_USD})"
+            echo ""
+            echo "Runs sread modules on a configurable schedule, diffs output between"
+            echo "runs, and invokes Claude to analyze accumulated changes."
+            echo ""
+            echo "Schedule: ${PATROL_STATE_DIR}/schedule.conf"
+            echo "State:    ${PATROL_STATE_DIR}/"
+            exit 0
+            ;;
+        *)
+            echo "ERROR: Unknown option: $1" >&2
+            exit 1
+            ;;
+    esac
+done
+
+# Apply overrides
+if [[ -n "$TICK_OVERRIDE" ]]; then
+    PATROL_TICK_INTERVAL="$TICK_OVERRIDE"
+fi
+if [[ -n "$REVIEW_OVERRIDE" ]]; then
+    PATROL_REVIEW_INTERVAL="$REVIEW_OVERRIDE"
+fi
+if [[ -n "$BUDGET_OVERRIDE" ]]; then
+    PATROL_REVIEW_BUDGET_USD="$BUDGET_OVERRIDE"
+fi
+
+# ── Preflight ────────────────────────────────────────────────────
+
+preflight_patrol() {
+    preflight_core
+
+    if ! command -v sread &>/dev/null; then
+        secy_log "patrol" "ERROR: sread not found in PATH"
+        exit 1
+    fi
+
+    if [[ "$NO_CLAUDE" != "true" ]]; then
+        if ! command -v claude &>/dev/null; then
+            secy_log "patrol" "WARNING: claude not found — falling back to --no-claude mode"
+            NO_CLAUDE=true
+        fi
+    fi
+}
+
+# ── Main daemon loop ─────────────────────────────────────────────
+
+main() {
+    preflight_patrol
+    init_patrol_state
+    load_schedule
+    daemon_init
+
+    if [[ ${#SCHED_MODULES[@]} -eq 0 ]]; then
+        secy_log "patrol" "ERROR: No valid modules in schedule — nothing to patrol"
+        exit 1
+    fi
+
+    secy_log "patrol" "Patrol daemon starting"
+    secy_log "patrol" "  Tick interval:   ${PATROL_TICK_INTERVAL}s"
+    secy_log "patrol" "  Review interval: ${PATROL_REVIEW_INTERVAL}s"
+    secy_log "patrol" "  Review budget:   \$${PATROL_REVIEW_BUDGET_USD}"
+    secy_log "patrol" "  Modules:         ${#SCHED_MODULES[@]}"
+    secy_log "patrol" "  Claude:          $(if [[ "$NO_CLAUDE" == "true" ]]; then echo "disabled"; else echo "enabled"; fi)"
+
+    # Phase 1: Init — run all modules once if no prior state
+    run_init_scan
+
+    # Phase 2+3: Continuous loop — run due modules, review diffs
+    while [[ "$SECY_DAEMON_RUNNING" == "true" ]]; do
+        local now
+        now="$(date +%s)"
+        local modules_run=0
+
+        # Check each scheduled module
+        for i in "${!SCHED_MODULES[@]}"; do
+            [[ "$SECY_DAEMON_RUNNING" == "true" ]] || break
+
+            local module="${SCHED_MODULES[$i]}"
+            local interval="${SCHED_INTERVALS[$i]}"
+            local priority="${SCHED_PRIORITIES[$i]}"
+
+            local last_run
+            last_run="$(get_last_run_time "$module")"
+            local elapsed=$(( now - last_run ))
+
+            if [[ $elapsed -ge $interval ]]; then
+                run_module "$module" "$priority" || true
+                (( modules_run++ )) || true
+            fi
+        done
+
+        if [[ $modules_run -gt 0 ]]; then
+            secy_log "patrol" "Tick: ran ${modules_run} module(s)"
+        fi
+
+        # Check for C2 directives (schedule overrides, etc.)
+        check_directives
+
+        # Phase 3: Review gate — invoke Claude if meaningful diffs accumulated
+        if [[ "$NO_CLAUDE" != "true" ]]; then
+            if should_review "$PATROL_REVIEW_INTERVAL"; then
+                run_claude_review "$PATROL_REVIEW_BUDGET_USD"
+            fi
+        fi
+
+        # Interruptible sleep (tick interval)
+        interruptible_sleep "$PATROL_TICK_INTERVAL"
+    done
+
+    secy_log "patrol" "Patrol daemon stopped"
+}
+
+main

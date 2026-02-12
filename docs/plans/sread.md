@@ -36,22 +36,20 @@ The `sread` binary:
 - Only reads regular files (not devices, sockets, FIFOs)
 - Resolves symlinks before checking blocklist (prevents traversal)
 
-### Layer 3: Namespace isolation (optional, future)
+### Layer 3: Container isolation (Docker)
 
-For higher-security deployments, run audit commands inside a restricted namespace:
+The primary deployment model runs sread inside a Docker container:
 
-```bash
-unshare --mount --net=none --pid --fork \
-    --root=/audit-chroot \
-    -- sread-command "$@"
-```
+- Host filesystem bind-mounted read-only at `/host`
+- Container filesystem is `read_only: true` — sread binary, config, and blocklists are immutable
+- Network restricted to `api.anthropic.com` only (via srt sandbox)
+- All capabilities dropped except `DAC_READ_SEARCH` (read host files), `SYS_ADMIN` + `NET_ADMIN` (for srt/bwrap)
+- `no-new-privileges: true` prevents privilege escalation
+- Writes only to the state volume (`/var/lib/secy/state`) and tmpfs (`/tmp`, `/root`)
 
-- Read-only bind mounts of host filesystem
-- No network (prevents exfiltration)
-- No PID visibility beyond the namespace
-- Output captured and reviewed before release
+This effectively provides the namespace isolation described in the original design — network isolation, filesystem immutability, restricted capabilities — via Docker rather than `unshare`.
 
-This layer is not yet implemented.
+For non-Docker deployments, the sudoers model (Layer 1) is the primary boundary. A future `unshare`-based namespace layer remains possible for standalone installs.
 
 ### Layer 4: Output redaction
 
@@ -125,6 +123,21 @@ Beyond what sread provides at the shell level:
 | No chaining | Prevent `sudo sh -c "..."` — only discrete commands |
 | Structured tool integration | Lynis/OpenSCAP as first-class tools, not raw shell |
 
+## Current Module Inventory
+
+25 modules across four categories:
+
+| Category | Modules |
+|----------|---------|
+| **System state** | `ports`, `users`, `services`, `packages`, `cron`, `firewall`, `sysctl`, `logs` |
+| **File analysis** | `files` (redacted config reads), `perms`, `setuid`, `world`, `hash`, `fileinfo`, `hashlookup` |
+| **Threat detection** | `spyproc`, `preload`, `kmod`, `autostart`, `netconn`, `desktop`, `surveil` (meta), `pkgverify`, `tamper` |
+| **Aggregation** | `full` (runs all modules) |
+
+The `hash`, `fileinfo`, and `hashlookup` modules support the watch daemon (Downloads malware triage). They intentionally skip the MIME whitelist — they must operate on binaries — but still respect the path blocklist.
+
+A local malware hash database (MalwareBazaar SHA256 export, ~1.5M hashes) is baked into the Docker image at build time at `data/malware-sha256.txt`. The `hashlookup` module uses `look(1)` for O(log n) binary search.
+
 ## Status
 
-Prototype. Not audited for production use. The redaction patterns are not comprehensive. The blocklist is not exhaustive. The namespace isolation layer is not implemented. Use for learning, experimentation, and as a starting point for a more robust solution.
+Prototype. Not audited for production use. The redaction patterns are not comprehensive. The blocklist is not exhaustive. Use for learning, experimentation, and as a starting point for a more robust solution.
