@@ -28,18 +28,20 @@ is_file_seen() {
     local filepath="$1"
     local filesize="$2"
     # Check if this exact file+size combo is already in the DB
-    grep -qP "^[0-9a-f]{64}\t${filesize}\t${filepath}\t" "$WATCH_SEEN_DB" 2>/dev/null
+    # Use grep -F (fixed string) to avoid regex injection from filenames
+    grep -F "	${filepath}	" "$WATCH_SEEN_DB" 2>/dev/null \
+        | grep -q "^[0-9a-f]\{64\}	${filesize}	"
 }
 
 get_seen_hash() {
     local filepath="$1"
     # Return the stored hash for a filepath (ignoring size)
-    grep -P "\t${filepath}\t" "$WATCH_SEEN_DB" 2>/dev/null | head -1 | cut -f1
+    grep -F "	${filepath}	" "$WATCH_SEEN_DB" 2>/dev/null | head -1 | cut -f1
 }
 
 get_seen_size() {
     local filepath="$1"
-    grep -P "\t${filepath}\t" "$WATCH_SEEN_DB" 2>/dev/null | head -1 | cut -f2
+    grep -F "	${filepath}	" "$WATCH_SEEN_DB" 2>/dev/null | head -1 | cut -f2
 }
 
 mark_file_seen() {
@@ -50,10 +52,11 @@ mark_file_seen() {
     timestamp="$(date -Iseconds)"
 
     # Remove any existing entry for this filepath
-    if grep -qP "\t${filepath}\t" "$WATCH_SEEN_DB" 2>/dev/null; then
+    # Use grep -F (fixed string) to avoid regex injection from filenames
+    if grep -qF "	${filepath}	" "$WATCH_SEEN_DB" 2>/dev/null; then
         local tmp
         tmp="$(mktemp)"
-        grep -vP "\t${filepath}\t" "$WATCH_SEEN_DB" > "$tmp" 2>/dev/null || true
+        grep -vF "	${filepath}	" "$WATCH_SEEN_DB" > "$tmp" 2>/dev/null || true
         mv "$tmp" "$WATCH_SEEN_DB"
     fi
 
@@ -175,7 +178,7 @@ dequeue_all() {
         mime="$(echo "$content" | cut -f2)"
         printf '%s\t%s\t%s\n' "$hash" "$filepath" "$mime"
         rm -f "$qfile"
-        (( count++ ))
+        (( count++ )) || true
         if [[ "$count" -ge "$WATCH_BATCH_SIZE" ]]; then
             break
         fi
@@ -186,7 +189,7 @@ queue_size() {
     local count=0
     for qfile in "${WATCH_QUEUE_DIR}"/*; do
         [[ -f "$qfile" ]] || continue
-        (( count++ ))
+        (( count++ )) || true
     done
     echo "$count"
 }
