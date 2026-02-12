@@ -49,7 +49,7 @@ Techniques for finding sophisticatedly hidden malicious programs on a Linux syst
 | 3.1 | SUID binary scan | **Y** | `sread setuid`, AGENT.md §SUID | Finds -perm -4000; agent checks for GTFOBins candidates |
 | 3.2 | SGID binary scan | **Y** | `sread setuid` | Finds -perm -2000 |
 | 3.3 | World-writable file scan | **Y** | `sread world`, AGENT.md §World-writable | Excludes /tmp, /var/tmp, /dev/shm, /run, /proc, /sys |
-| 3.4 | Timestamp manipulation detection (mtime vs ctime discrepancy) | **N** | — | ctime cannot be faked without raw disk access; mtime newer than ctime indicates backdating |
+| 3.4 | Timestamp manipulation detection (mtime vs ctime discrepancy) | **Y** | `sread tamper` | Flags system binaries where ctime >> mtime (backdated); also flags recent ctime |
 | 3.5 | Extended attribute (xattr) payloads | **N** | — | Malware can store config/payloads in xattrs (getfattr -d -m '') |
 | 3.6 | Bind mount file hiding | **N** | — | mount --bind can hide directories; compare /proc/mounts for overlapping mount points |
 | 3.7 | Dotfile/unicode filename tricks | **N** | — | ". " (dot-space), ".." in non-root dirs, Cyrillic/lookalike characters |
@@ -113,7 +113,6 @@ These are feasible to implement within secy's file-reading architecture and woul
 
 | # | Threat | Difficulty | Impact |
 |---|--------|------------|--------|
-| 3.4 | Timestamp manipulation detection | Medium | Medium — stat each binary, flag mtime < ctime |
 | 3.8 | /dev/shm scan (not exclude) | Low | Medium — dedicated scan of /dev/shm for executables and payloads |
 
 ### Not covered (specialized)
