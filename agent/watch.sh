@@ -25,6 +25,12 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --poll-interval)
+            if [[ $# -lt 2 ]]; then
+                echo "ERROR: --poll-interval requires a value" >&2; exit 1
+            fi
+            if ! [[ "$2" =~ ^[0-9]+$ ]]; then
+                echo "ERROR: --poll-interval requires a numeric value" >&2; exit 1
+            fi
             POLL_OVERRIDE="$2"
             shift 2
             ;;
@@ -126,7 +132,7 @@ scan_downloads() {
                 secy_log "watch" "Size changed: ${filepath} (${prev_size} -> ${filesize}), re-hashing"
             fi
 
-            (( new_files++ ))
+            (( new_files++ )) || true
 
             # Compute SHA256
             local hash
@@ -142,7 +148,7 @@ scan_downloads() {
             fi
 
             if echo "$lookup_result" | grep -q '^\[MATCH\]'; then
-                (( hash_matches++ ))
+                (( hash_matches++ )) || true
                 write_alert "CRITICAL" "$hash" "$filepath" "SHA256 matches known malware in MalwareBazaar database"
                 mark_file_seen "$hash" "$filesize" "$filepath"
                 continue
@@ -161,17 +167,17 @@ scan_downloads() {
                         local mime
                         mime="$(file --mime-type -b "$filepath" 2>/dev/null || echo 'unknown')"
                         enqueue_file "$hash" "$filepath" "$mime"
-                        (( queued++ ))
+                        (( queued++ )) || true
                         secy_log "watch" "Queued for analysis: ${filepath} (${mime})"
                     else
                         secy_log "watch" "New file (no-claude): ${filepath} [${classification}]"
                     fi
                     ;;
                 SKIP_MEDIA)
-                    (( skipped++ ))
+                    (( skipped++ )) || true
                     ;;
                 SKIP_TINY|SKIP_LARGE|SKIP_OTHER)
-                    (( skipped++ ))
+                    (( skipped++ )) || true
                     secy_log "watch" "Skipped: ${filepath} [${classification}]"
                     ;;
             esac

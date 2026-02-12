@@ -26,14 +26,23 @@ while [[ $# -gt 0 ]]; do
             shift
             ;;
         --tick-interval)
+            if [[ $# -lt 2 ]] || ! [[ "$2" =~ ^[0-9]+$ ]]; then
+                echo "ERROR: --tick-interval requires a numeric value" >&2; exit 1
+            fi
             TICK_OVERRIDE="$2"
             shift 2
             ;;
         --review-interval)
+            if [[ $# -lt 2 ]] || ! [[ "$2" =~ ^[0-9]+$ ]]; then
+                echo "ERROR: --review-interval requires a numeric value" >&2; exit 1
+            fi
             REVIEW_OVERRIDE="$2"
             shift 2
             ;;
         --review-budget)
+            if [[ $# -lt 2 ]] || ! [[ "$2" =~ ^[0-9]+\.?[0-9]*$ ]]; then
+                echo "ERROR: --review-budget requires a numeric value" >&2; exit 1
+            fi
             BUDGET_OVERRIDE="$2"
             shift 2
             ;;
@@ -134,7 +143,7 @@ main() {
 
             if [[ $elapsed -ge $interval ]]; then
                 run_module "$module" "$priority" || true
-                (( modules_run++ ))
+                (( modules_run++ )) || true
             fi
         done
 

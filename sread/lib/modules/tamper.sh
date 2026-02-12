@@ -11,7 +11,12 @@ run() {
     # This indicates someone modified the file then backdated mtime
     local threshold_secs=172800
     if [[ "${1:-}" == "--threshold" ]] && [[ -n "${2:-}" ]]; then
-        threshold_secs=$(( ${2} * 3600 ))
+        if [[ "${2}" =~ ^[0-9]+$ ]]; then
+            threshold_secs=$(( ${2} * 3600 ))
+        else
+            echo "ERROR: --threshold requires a numeric value (hours)" >&2
+            exit 1
+        fi
     fi
 
     section_header "TIMESTAMP MANIPULATION DETECTION"

@@ -76,6 +76,12 @@ load_schedule() {
         [[ -z "$module" ]] && continue
         [[ -z "$interval" ]] && continue
 
+        # Validate interval is numeric
+        if ! [[ "$interval" =~ ^[0-9]+$ ]]; then
+            secy_log "patrol" "WARNING: Non-numeric interval '${interval}' for module '${module}' — skipping"
+            continue
+        fi
+
         # Validate module exists
         if ! command -v sread &>/dev/null || ! sread "$module" --help &>/dev/null 2>&1; then
             # Fall back to checking if module file exists
@@ -183,7 +189,7 @@ run_init_scan() {
 
         # Only run if no latest.out exists
         if [[ ! -f "${module_dir}/latest.out" ]]; then
-            (( count++ ))
+            (( count++ )) || true
             secy_log "patrol" "Init scan [${count}/${total}]: ${module}"
             sread "$module" > "${module_dir}/latest.out" 2>/dev/null || {
                 secy_log "patrol" "WARNING: Init scan failed for '${module}'"
@@ -257,7 +263,7 @@ assemble_diffs() {
 
     for f in "${PATROL_DIFFS_DIR}"/*.diff; do
         [[ -f "$f" ]] || continue
-        (( count++ ))
+        (( count++ )) || true
         output+="$(cat "$f")"
         output+=$'\n\n'
     done
@@ -268,7 +274,7 @@ assemble_diffs() {
 count_pending_diffs() {
     local count=0
     for f in "${PATROL_DIFFS_DIR}"/*.diff; do
-        [[ -f "$f" ]] && (( count++ ))
+        [[ -f "$f" ]] && { (( count++ )) || true; }
     done
     echo "$count"
 }
