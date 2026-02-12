@@ -31,7 +31,14 @@ secy_log() {
     echo "$msg" >&2
 
     # Persistent file logging (best-effort)
-    local logfile="${SECY_LOG_DIR}/secy.log"
+    # Use per-tag log files when tag is set to avoid rotation races
+    # between concurrent daemons (watch + patrol)
+    local logfile
+    if [[ -n "$tag" ]]; then
+        logfile="${SECY_LOG_DIR}/secy-${tag}.log"
+    else
+        logfile="${SECY_LOG_DIR}/secy.log"
+    fi
     if [[ -d "$SECY_LOG_DIR" ]]; then
         if [[ -f "$logfile" ]] && [[ "$(stat -c%s "$logfile" 2>/dev/null || echo 0)" -gt $SECY_LOG_MAX_SIZE ]]; then
             mv "$logfile" "${logfile}.1" 2>/dev/null || true
