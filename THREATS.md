@@ -70,7 +70,7 @@ Techniques for finding sophisticatedly hidden malicious programs on a Linux syst
 | 4.2 | Out-of-tree / unsigned module detection | **Y** | `sread kmod` | Checks /sys/module/[name]/taint for O (out-of-tree) and E (unsigned) flags |
 | 4.3 | Input subsystem module enumeration | **Y** | `sread kmod` | Lists uinput, evdev, hid, keyboard modules |
 | 4.4 | /proc/modules vs /sys/module/ cross-verification | **Y** | `sread kmod` | Checks both directions; filters built-in modules via refcnt |
-| 4.5 | Syscall table integrity (kprobes list) | **N** | — | /sys/kernel/debug/kprobes/list shows unexpected function hooks |
+| 4.5 | Syscall table integrity (kprobes list) | **P** | `sread kmod` | Enumerates active kprobes and kprobe events; flags hooks on sensitive functions; requires debugfs mount |
 | 4.6 | eBPF program enumeration | **P** | `sread ebpf` | Pinned BPF objects, bpftool prog list, active tracepoints, BPF sysctl; needs bpftool/debugfs for full coverage |
 | 4.7 | DKMS third-party module persistence | **N** | — | /var/lib/dkms/ — modules that auto-rebuild on kernel updates |
 | 4.8 | Kernel taint bitmask decoding | **Y** | `sread kmod` | Per-module taint flags + system-wide /proc/sys/kernel/tainted with full bitmask decode |

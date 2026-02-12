@@ -6,6 +6,8 @@ run() {
 
     local proc="/proc"
     [[ -d "/host/proc" ]] && proc="/host/proc"
+    local sys="/sys"
+    [[ -d "/host/sys" ]] && sys="/host/sys"
 
     section_header "KERNEL MODULE ANALYSIS"
 
@@ -159,6 +161,48 @@ run() {
     fi
     echo ""
 
+    # ── Active kprobes ─────────────────────────────────────────────
+    # Kprobes allow dynamic hooking of kernel functions. A rootkit can
+    # use them to intercept syscalls or sensitive operations. Hooks on
+    # security-critical functions are especially suspicious.
+    echo "--- Active kprobes ---"
+    local kprobe_list="${sys}/kernel/debug/kprobes/list"
+    local kprobe_count=0
+    local sensitive_kprobes=0
+    local sensitive_funcs="sys_execve|sys_open|sys_openat|sys_connect|sys_accept|sys_ptrace|vfs_read|vfs_write|tcp_sendmsg|security_"
+    if [[ -f "$kprobe_list" ]]; then
+        while IFS= read -r line; do
+            [[ -z "$line" ]] && continue
+            kprobe_count=$((kprobe_count + 1))
+            if echo "$line" | grep -qE "$sensitive_funcs"; then
+                echo "  [!] ${line}"
+                sensitive_kprobes=$((sensitive_kprobes + 1))
+            else
+                echo "  ${line}"
+            fi
+        done < "$kprobe_list"
+        [[ $kprobe_count -eq 0 ]] && echo "  (none active)"
+    else
+        echo "  (debugfs kprobes not accessible — requires debugfs mount)"
+    fi
+    echo ""
+
+    # ── Kprobe tracing events ──────────────────────────────────────
+    echo "--- Kprobe tracing events ---"
+    local kprobe_events="${sys}/kernel/debug/tracing/kprobe_events"
+    local kprobe_event_count=0
+    if [[ -f "$kprobe_events" ]]; then
+        while IFS= read -r line; do
+            [[ -z "$line" ]] && continue
+            echo "  [!] ${line}"
+            kprobe_event_count=$((kprobe_event_count + 1))
+        done < "$kprobe_events"
+        [[ $kprobe_event_count -eq 0 ]] && echo "  (none configured)"
+    else
+        echo "  (debugfs tracing not accessible)"
+    fi
+    echo ""
+
     # ── Module count summary ─────────────────────────────────────────
     local total
     total="$(wc -l < "$modules_file" | tr -d ' ')"
@@ -167,7 +211,9 @@ run() {
     echo "  Out-of-tree/unsigned: ${oot_found}"
     echo "  Hidden from sysfs: ${hidden_from_sysfs}"
     echo "  Hidden from procfs: ${hidden_from_proc}"
+    echo "  Active kprobes: ${kprobe_count}"
+    echo "  Sensitive function hooks: ${sensitive_kprobes}"
 
     echo ""
-    log_ok "Kernel module scan complete"
+    log_ok "Kernel module scan complete (kprobes: ${kprobe_count}, sensitive: ${sensitive_kprobes})"
 }

@@ -368,7 +368,7 @@ With `--deep`: also correlates fd socket inodes against `/host/proc/net/raw` and
 - Check if `/host/etc/ld.so.preload` exists — it should NOT on a normal system. Libraries listed here are injected into every process.
 - Read `/host/proc/[pid]/environ` for any process with `LD_PRELOAD=` set.
 
-**Kernel modules** (`sread kmod`) performs four checks:
+**Kernel modules** (`sread kmod`) performs six checks:
 
 1. **Suspicious names** — reads `/host/proc/modules`, flags modules matching: keylog, spy, hook, rootkit, hide, stealth, sniff, intercept, backdoor.
 
@@ -377,6 +377,10 @@ With `--deep`: also correlates fd socket inodes against `/host/proc/net/raw` and
 3. **Cross-verification** — compares the module list from `/host/proc/modules` against `/host/sys/module/*/`. A rootkit that hooks procfs to hide its module from `/proc/modules` may forget to hide from sysfs (or vice versa). Discrepancies in either direction are a strong rootkit indicator. Filters built-in modules (no `refcnt` file in sysfs) to avoid false positives.
 
 4. **System-wide taint bitmask** — reads `/host/proc/sys/kernel/tainted` and decodes all 18 kernel taint bits (proprietary modules, force-loads, unsigned modules, MCEs, live patches, etc.). A non-zero value means something out-of-ordinary has loaded into the kernel.
+
+5. **Active kprobes** — reads `/host/sys/kernel/debug/kprobes/list`; flags hooks on sensitive kernel functions (`sys_execve`, `sys_open`, `sys_connect`, `vfs_read`, `vfs_write`, `tcp_sendmsg`, `security_*`). Requires debugfs.
+
+6. **Kprobe tracing events** — reads `/host/sys/kernel/debug/tracing/kprobe_events` for dynamically configured kprobe trace points.
 
 **eBPF programs** (`sread ebpf`) checks four areas:
 

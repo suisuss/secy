@@ -91,7 +91,7 @@ _show_capabilities() {
     echo "  - List cron jobs"
     echo "  - Detect surveillance processes (keyloggers, screen recorders, RATs)"
     echo "  - Check for LD_PRELOAD hijacking and shell hook injection"
-    echo "  - Analyze kernel modules for suspicious entries"
+    echo "  - Analyze kernel modules, kprobes, and DKMS persistence"
     echo "  - Enumerate eBPF programs and security-relevant BPF tracepoints"
     echo "  - Enumerate autostart persistence (XDG, systemd user, init.d)"
     echo "  - Analyze established network connections with process attribution"
