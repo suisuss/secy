@@ -294,7 +294,8 @@ secy/
 │   ├── findings/                  # Timestamped reports and alerts
 │   ├── watch/                     # Watch daemon state (seen.db, queue, log)
 │   └── patrol/                    # Patrol daemon state (runs, diffs, schedule, log)
-├── THREATS.md                     # Threat detection index (51 techniques, coverage map)
+├── THREATS.md                     # Threat detection index (63 techniques, coverage map)
+├── THREATS-DEPTH.md               # Detailed threat explanations, detection, remediation
 ├── Dockerfile
 ├── docker-compose.yml
 ├── .env.example                   # API key config template
@@ -361,4 +362,5 @@ Prototype. Not audited for production use. Redaction patterns and blocklists are
 - [docs/plans/watch-mode.md](docs/plans/watch-mode.md) — Watch mode design
 - [docs/plans/patrol-mode.md](docs/plans/patrol-mode.md) — Patrol mode design
 - [docs/plans/threatlab.md](docs/plans/threatlab.md) — Threat lab test container design
-- [THREATS.md](THREATS.md) — Threat detection index (51 techniques, coverage map)
+- [THREATS.md](THREATS.md) — Threat detection index (63 techniques, coverage map)
+- [THREATS-DEPTH.md](THREATS-DEPTH.md) — Detailed threat explanations, detection sources, and remediation

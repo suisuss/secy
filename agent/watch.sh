@@ -190,7 +190,7 @@ scan_downloads() {
                     ;;
             esac
 
-        done < <(find "$dl_dir" -maxdepth "${WATCH_SCAN_DEPTH}" -type f -print0 2>/dev/null)
+        done < <(find "$dl_dir" -maxdepth "${WATCH_SCAN_DEPTH}" -not -path '*/secy-ignore/*' -type f -print0 2>/dev/null)
     done
 
     # Return counts via globals (bash can't return multiple values)
