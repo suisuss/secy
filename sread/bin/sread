@@ -93,6 +93,7 @@ _show_capabilities() {
     echo "  - Check for LD_PRELOAD hijacking and shell hook injection"
     echo "  - Analyze kernel modules, kprobes, and DKMS persistence"
     echo "  - Enumerate eBPF programs and security-relevant BPF tracepoints"
+    echo "  - Scan for suspicious extended attributes (xattrs) on system binaries"
     echo "  - Enumerate autostart persistence (XDG, systemd user, init.d)"
     echo "  - Analyze established network connections with process attribution"
     echo "  - Audit desktop environment (remote desktop, browser extensions)"

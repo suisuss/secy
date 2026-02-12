@@ -119,6 +119,7 @@ sread ebpf                 # eBPF programs, security tracepoints, BPF sysctl con
 sread autostart            # XDG autostart, systemd user services, rc.local, init.d
 sread netconn              # Established connections with process attribution
 sread desktop              # Remote desktop, screen recording, browser extensions
+sread xattr                # Extended attributes on system binaries and temp dirs
 
 # Integrity and tampering
 sread pkgverify            # Verify critical package checksums against dpkg md5sums
@@ -340,6 +341,7 @@ sread ebpf                 # eBPF programs, security tracepoints, BPF sysctl
 sread autostart            # XDG autostart, systemd user services, rc.local, init.d
 sread netconn              # Established connections with process attribution
 sread desktop              # Remote desktop, screen recording, browser extensions
+sread xattr                # Extended attributes on system binaries and temp dirs
 sread surveil              # Run all of the above
 ```
 
@@ -394,6 +396,14 @@ With `--deep`: also correlates fd socket inodes against `/host/proc/net/raw` and
 2. **Loaded programs** — uses `bpftool prog list` (if available) to enumerate all loaded BPF programs; flags security-sensitive types (tracepoint, kprobe, raw_tracepoint, lsm, tracing).
 3. **Active security tracepoints** — reads debugfs tracing events for enabled syscall and security tracepoints.
 4. **BPF sysctl** — checks `bpf_jit_enable` and `unprivileged_bpf_disabled`; flags if unprivileged users can load BPF programs.
+
+**Extended attributes** (`sread xattr`) scans for xattr-based payloads:
+
+1. **Non-standard xattrs on system binaries** — scans `/usr/bin`, `/usr/sbin`, `/bin`, `/sbin` with `getfattr`; allowlists security framework xattrs (SELinux, capabilities, IMA, AppArmor, POSIX ACLs); flags anything else.
+2. **user.* namespace xattrs** — dedicated scan for user-writable xattrs on system binaries (should never exist).
+3. **Temp directory xattrs** — scans `/tmp`, `/dev/shm`, `/var/tmp` for files with non-standard xattrs.
+
+Degrades gracefully if `getfattr` (attr package) is not installed.
 
 **Persistence mechanisms**:
 - XDG autostart: `/host/etc/xdg/autostart/*.desktop` and `/host/home/[user]/.config/autostart/*.desktop` — parse `Name=` and `Exec=` fields
