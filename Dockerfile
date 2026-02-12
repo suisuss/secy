@@ -50,7 +50,7 @@ RUN mkdir -p /usr/local/lib/sread/data \
 
 # Install agent
 COPY agent/ /opt/secy/
-RUN chmod +x /opt/secy/secy.sh /opt/secy/entrypoint.sh /opt/secy/watch.sh
+RUN chmod +x /opt/secy/secy.sh /opt/secy/entrypoint.sh /opt/secy/watch.sh /opt/secy/patrol.sh
 
 # srt settings — staged outside /root (which is a tmpfs at runtime).
 # entrypoint.sh copies this into place.
