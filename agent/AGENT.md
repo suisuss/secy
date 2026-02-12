@@ -115,6 +115,7 @@ sread spyproc              # Known spyware, deleted binaries, memfd, name spoofi
 sread spyproc --deep       # Also check raw/packet sockets
 sread preload              # LD_PRELOAD hijacking, shell hooks, PAM modules
 sread kmod                 # Suspicious/unsigned modules, /proc/modules vs /sys/module cross-check, kernel taint
+sread ebpf                 # eBPF programs, security tracepoints, BPF sysctl configuration
 sread autostart            # XDG autostart, systemd user services, rc.local, init.d
 sread netconn              # Established connections with process attribution
 sread desktop              # Remote desktop, screen recording, browser extensions
@@ -335,6 +336,7 @@ sread spyproc              # Full process scan (see below)
 sread spyproc --deep       # Also check raw/packet sockets
 sread preload              # LD_PRELOAD hijacking, shell hooks, PAM modules
 sread kmod                 # Kernel module analysis (see below)
+sread ebpf                 # eBPF programs, security tracepoints, BPF sysctl
 sread autostart            # XDG autostart, systemd user services, rc.local, init.d
 sread netconn              # Established connections with process attribution
 sread desktop              # Remote desktop, screen recording, browser extensions
@@ -375,6 +377,13 @@ With `--deep`: also correlates fd socket inodes against `/host/proc/net/raw` and
 3. **Cross-verification** — compares the module list from `/host/proc/modules` against `/host/sys/module/*/`. A rootkit that hooks procfs to hide its module from `/proc/modules` may forget to hide from sysfs (or vice versa). Discrepancies in either direction are a strong rootkit indicator. Filters built-in modules (no `refcnt` file in sysfs) to avoid false positives.
 
 4. **System-wide taint bitmask** — reads `/host/proc/sys/kernel/tainted` and decodes all 18 kernel taint bits (proprietary modules, force-loads, unsigned modules, MCEs, live patches, etc.). A non-zero value means something out-of-ordinary has loaded into the kernel.
+
+**eBPF programs** (`sread ebpf`) checks four areas:
+
+1. **Pinned BPF programs** — enumerates `/host/sys/fs/bpf/` for pinned BPF objects that persist beyond process lifetime.
+2. **Loaded programs** — uses `bpftool prog list` (if available) to enumerate all loaded BPF programs; flags security-sensitive types (tracepoint, kprobe, raw_tracepoint, lsm, tracing).
+3. **Active security tracepoints** — reads debugfs tracing events for enabled syscall and security tracepoints.
+4. **BPF sysctl** — checks `bpf_jit_enable` and `unprivileged_bpf_disabled`; flags if unprivileged users can load BPF programs.
 
 **Persistence mechanisms**:
 - XDG autostart: `/host/etc/xdg/autostart/*.desktop` and `/host/home/[user]/.config/autostart/*.desktop` — parse `Name=` and `Exec=` fields
