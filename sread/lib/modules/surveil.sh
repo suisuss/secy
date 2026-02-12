@@ -14,7 +14,7 @@ run() {
     echo "  Kernel: $(uname -r)"
     echo "================================================================"
 
-    local modules=(spyproc preload kmod ebpf autostart netconn desktop xattr mounts)
+    local modules=(spyproc preload kmod ebpf autostart netconn desktop xattr mounts dnstun)
     for mod in "${modules[@]}"; do
         if [[ -f "${SREAD_ROOT}/lib/modules/${mod}.sh" ]]; then
             log_info "Running module: ${mod}"

@@ -121,6 +121,7 @@ sread netconn              # Established connections with process attribution
 sread desktop              # Remote desktop, screen recording, browser extensions
 sread xattr                # Extended attributes on system binaries and temp dirs
 sread mounts               # Bind mounts, mount overlaps, system directory mount types
+sread dnstun               # DNS tunneling tools, rogue listeners, resolv.conf analysis
 
 # Integrity and tampering
 sread pkgverify            # Verify critical package checksums against dpkg md5sums
@@ -344,6 +345,7 @@ sread netconn              # Established connections with process attribution
 sread desktop              # Remote desktop, screen recording, browser extensions
 sread xattr                # Extended attributes on system binaries and temp dirs
 sread mounts               # Bind mounts, mount overlaps, system directory mount types
+sread dnstun               # DNS tunneling tools, rogue listeners, resolv.conf
 sread surveil              # Run all of the above
 ```
 
@@ -412,6 +414,13 @@ Degrades gracefully if `getfattr` (attr package) is not installed.
 1. **Bind mounts** — parses `/host/proc/1/mountinfo` for mounts with root != "/" (bind mount indicator). Flags bind mounts over sensitive system paths (`/usr/bin`, `/usr/sbin`, `/etc`, `/lib`, `/boot`).
 2. **Overlapping mounts** — finds parent-child mount point pairs on the same device, which can shadow directory contents.
 3. **System directory types** — informational summary of filesystem types mounted on system directories.
+
+**DNS tunneling** (`sread dnstun`) detects DNS-based exfiltration:
+
+1. **Tunneling tool processes** — scans cmdline for known DNS tunneling tools (iodine, dns2tcp, dnscat2, dnschef, etc.).
+2. **Rogue DNS listeners** — parses `/host/proc/net/udp` for UDP port 53 listeners; allowlists known resolvers (systemd-resolved, dnsmasq, unbound, etc.); correlates socket inode to PID.
+3. **Suspicious resolv.conf** — flags nameservers not in a known-good list (localhost, Google, Cloudflare, Quad9, OpenDNS).
+4. **Tunneling tools on disk** — checks system binary directories for known tunnel tool binaries.
 
 **Persistence mechanisms**:
 - XDG autostart: `/host/etc/xdg/autostart/*.desktop` and `/host/home/[user]/.config/autostart/*.desktop` — parse `Name=` and `Exec=` fields

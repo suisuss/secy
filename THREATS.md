@@ -85,7 +85,7 @@ Techniques for finding sophisticatedly hidden malicious programs on a Linux syst
 | 5.4 | UDP socket enumeration | **Y** | AGENT.md §Network | Agent reads /proc/net/udp and udp6 |
 | 5.5 | Raw socket detection (/proc/net/raw) | **Y** | `sread spyproc --deep` | Almost nothing legitimate uses raw sockets besides ping |
 | 5.6 | Packet socket detection (/proc/net/packet) | **Y** | `sread spyproc --deep` | Detects sniffers |
-| 5.7 | DNS exfiltration / tunneling detection | **N** | — | Requires DNS query capture; long subdomain labels or high query volume to single domain |
+| 5.7 | DNS exfiltration / tunneling detection | **P** | `sread dnstun` | Detects tunneling tool processes/binaries, rogue UDP/53 listeners, suspicious resolv.conf; needs packet capture for full detection |
 | 5.8 | Conntrack / NAT translation analysis | **N** | — | /proc/net/nf_conntrack reveals hidden destinations behind NAT |
 | 5.9 | Socket inode → PID correlation | **Y** | `sread netconn` | _find_proc_by_inode helper; also recommended as host-side ss -tnp |
 | 5.10 | C2 / malicious IP reputation matching | **N** | — | Cross-reference established connections against known-bad IP databases (Feodo Tracker, abuse.ch); bakeable at build time like hash DB |
