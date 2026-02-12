@@ -86,7 +86,6 @@ invoke_claude() {
     local stream_formatter="${AGENT_DIR}/lib/format-stream.sh"
     local raw_json
     raw_json="$(mktemp)"
-    trap 'rm -f "$raw_json"' RETURN
 
     "${claude_cmd[@]}" \
         --dangerously-skip-permissions \
@@ -102,6 +101,7 @@ invoke_claude() {
         | bash "$stream_formatter" >&2 || true
 
     cat "$raw_json"
+    rm -f "$raw_json"
 }
 
 # ── Daemon utilities ─────────────────────────────────────────────
