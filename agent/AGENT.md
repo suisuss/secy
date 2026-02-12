@@ -122,6 +122,7 @@ sread desktop              # Remote desktop, screen recording, browser extension
 sread xattr                # Extended attributes on system binaries and temp dirs
 sread mounts               # Bind mounts, mount overlaps, system directory mount types
 sread dnstun               # DNS tunneling tools, rogue listeners, resolv.conf analysis
+sread firmware             # EFI/UEFI Secure Boot, boot entries, BMC/IPMI presence
 
 # Integrity and tampering
 sread pkgverify            # Verify critical package checksums against dpkg md5sums
@@ -421,6 +422,15 @@ Degrades gracefully if `getfattr` (attr package) is not installed.
 2. **Rogue DNS listeners** — parses `/host/proc/net/udp` for UDP port 53 listeners; allowlists known resolvers (systemd-resolved, dnsmasq, unbound, etc.); correlates socket inode to PID.
 3. **Suspicious resolv.conf** — flags nameservers not in a known-good list (localhost, Google, Cloudflare, Quad9, OpenDNS).
 4. **Tunneling tools on disk** — checks system binary directories for known tunnel tool binaries.
+
+**Firmware analysis** (`sread firmware`) inspects EFI and hardware management:
+
+1. **UEFI Secure Boot state** — detects UEFI vs Legacy BIOS; reads SecureBoot efivar or mokutil to check if Secure Boot is enabled. Flags if disabled.
+2. **EFI boot entries** — enumerates Boot0* efivars with descriptions; reads BootOrder; flags unusually large variables (>4KB, potential payload storage).
+3. **EFI variable overview** — counts total EFI variables; flags any over 4KB.
+4. **BMC/IPMI presence** — checks `/dev/ipmi0`, IPMI kernel modules in `/proc/modules`, `ipmitool bmc info` if available, and IPMI network interfaces.
+
+Note: firmware analysis is inherently limited from userspace. Cannot verify boot chain integrity or audit BMC firmware.
 
 **Persistence mechanisms**:
 - XDG autostart: `/host/etc/xdg/autostart/*.desktop` and `/host/home/[user]/.config/autostart/*.desktop` — parse `Name=` and `Exec=` fields

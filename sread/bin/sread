@@ -96,6 +96,7 @@ _show_capabilities() {
     echo "  - Scan for suspicious extended attributes (xattrs) on system binaries"
     echo "  - Detect bind mounts hiding files and suspicious mount overlaps"
     echo "  - Detect DNS tunneling tools, rogue listeners, and suspicious DNS config"
+    echo "  - Inspect EFI/UEFI Secure Boot state, boot entries, and BMC/IPMI presence"
     echo "  - Enumerate autostart persistence (XDG, systemd user, init.d)"
     echo "  - Analyze established network connections with process attribution"
     echo "  - Audit desktop environment (remote desktop, browser extensions)"

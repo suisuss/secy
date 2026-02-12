@@ -94,9 +94,9 @@ Techniques for finding sophisticatedly hidden malicious programs on a Linux syst
 
 | # | Technique | Covered | Where | Notes |
 |---|-----------|---------|-------|-------|
-| 6.1 | EFI variable inspection (/sys/firmware/efi/efivars/) | **N** | — | EFI bootkits survive OS reinstall |
-| 6.2 | UEFI Secure Boot state verification | **N** | — | mokutil --sb-state; unexpected disable is suspicious |
-| 6.3 | BMC/IPMI presence detection | **N** | — | Independent computer with network access; persists across OS reinstall |
+| 6.1 | EFI variable inspection (/sys/firmware/efi/efivars/) | **P** | `sread firmware` | Enumerates boot entries, flags large efivars (>4KB); limited to what sysfs exposes |
+| 6.2 | UEFI Secure Boot state verification | **P** | `sread firmware` | Reads SecureBoot efivar and mokutil; flags if disabled; cannot verify boot chain integrity |
+| 6.3 | BMC/IPMI presence detection | **P** | `sread firmware` | Checks /dev/ipmi0, IPMI modules, ipmitool, network interfaces; cannot audit BMC firmware |
 
 ## 7. Meta-techniques
 
@@ -135,11 +135,7 @@ Require capabilities beyond file reading, or have limited applicability:
 
 | # | Threat | Why hard |
 |---|--------|----------|
-| 4.5 | Syscall table integrity | Requires debugfs access (/sys/kernel/debug), usually root + mount |
-| 4.6 | eBPF enumeration | Requires bpftool or /sys/fs/bpf (may not be mounted in container) |
-| 5.7 | DNS tunneling | Requires packet capture or DNS query logs |
 | 5.8 | Conntrack analysis | Requires /proc/net/nf_conntrack (host netns + conntrack loaded) |
-| 6.1–6.3 | Firmware/hardware | Requires EFI vars and IPMI access; out of scope |
 | 7.6 | Offline analysis | Fundamentally cannot be done from a running system |
 | 7.9 | Dynamic analysis / sandboxing | Requires execution environment; fundamentally incompatible with read-only container model |
 | 8.1 | Real-time event hooks | Requires host-side kernel access (eBPF, auditd, fanotify); Docker container can only poll |
@@ -167,8 +163,14 @@ Could be added within the current architecture (read-only container, build-time 
 
 | # | Current state | Improvement |
 |---|---------------|-------------|
+| 2.8 | Thread comm mismatch heuristic | Deeper thread analysis (stack traces, memory regions) |
+| 2.9 | PID namespace comparison with container allowlist | Track namespace creation events, correlate with network activity |
 | 3.9 | perms.sh runs getfacl | Flag ACLs that grant unexpected users access to sensitive files |
 | 3.10 | perms.sh runs lsattr | Flag immutable/append-only bits on non-standard files |
+| 4.5 | Kprobe enumeration from debugfs | Requires debugfs mount; syscall table address comparison needs /proc/kallsyms |
+| 4.6 | Pinned BPF + bpftool + tracepoints + sysctl | Requires bpftool for full program listing; container may lack bpffs |
+| 5.7 | Tool/binary/listener/resolv.conf detection | Needs packet capture (tcpdump/tshark) to detect actual DNS tunneling traffic |
+| 6.1–6.3 | EFI vars, Secure Boot, BMC/IPMI presence | Cannot verify boot chain integrity or audit BMC firmware from userspace |
 | 7.2 | kmod cross-check implemented; netconn uses host netns | Further cross-source techniques (e.g., /proc/net/tcp vs ss output) |
 | 7.3 | Name-based + behavioral + exe-based | fd analysis for all processes, not just known names |
 | 8.5 | Ad-hoc hardening checks in AGENT.md | Map checks to CIS benchmark IDs; produce a hardening score; add STIG/PCI profiles |
