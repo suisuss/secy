@@ -100,7 +100,7 @@ Techniques for finding sophisticatedly hidden malicious programs on a Linux syst
 | 7.2 | Cross-source verification (multiple sources for same data) | **P** | — | netconn.sh uses /host/proc/1/net for host namespace awareness, but no systematic cross-verification (e.g., /proc/modules vs /sys/module/) |
 | 7.3 | Behavioral analysis (what processes *do* vs what they're named) | **P** | `sread spyproc` | Checks fd targets and socket types, but relies heavily on name-based signature matching |
 | 7.4 | Entropy analysis of suspicious binaries | **N** | — | Packed/encrypted binaries have abnormally high entropy |
-| 7.5 | Package integrity verification (debsums -c / rpm -Va) | **N** | — | Compares installed files against package checksums; detects modified system binaries |
+| 7.5 | Package integrity verification (debsums -c / rpm -Va) | **Y** | `sread pkgverify` | Verifies md5sums for critical packages; --all for full scan |
 | 7.6 | Offline / external analysis (boot from trusted media) | **N** | — | Out of scope for a running-system tool; noted for completeness |
 
 ---
@@ -113,7 +113,6 @@ These are feasible to implement within secy's file-reading architecture and woul
 
 | # | Threat | Difficulty | Impact |
 |---|--------|------------|--------|
-| 7.5 | Package integrity verification | Medium | High — read /var/lib/dpkg/info/*.md5sums and compare against file hashes |
 | 3.4 | Timestamp manipulation detection | Medium | Medium — stat each binary, flag mtime < ctime |
 | 3.8 | /dev/shm scan (not exclude) | Low | Medium — dedicated scan of /dev/shm for executables and payloads |
 
