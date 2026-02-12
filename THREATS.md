@@ -64,7 +64,7 @@ Techniques for finding sophisticatedly hidden malicious programs on a Linux syst
 | 4.1 | Suspicious kernel module name matching | **Y** | `sread kmod` | Pattern match: keylog, spy, hook, rootkit, hide, stealth, sniff, intercept, backdoor |
 | 4.2 | Out-of-tree / unsigned module detection | **Y** | `sread kmod` | Checks /sys/module/[name]/taint for O (out-of-tree) and E (unsigned) flags |
 | 4.3 | Input subsystem module enumeration | **Y** | `sread kmod` | Lists uinput, evdev, hid, keyboard modules |
-| 4.4 | /proc/modules vs /sys/module/ cross-verification | **N** | — | A rootkit hiding from /proc/modules may forget to hide from sysfs. Discrepancy = strong signal. |
+| 4.4 | /proc/modules vs /sys/module/ cross-verification | **Y** | `sread kmod` | Checks both directions; filters built-in modules via refcnt |
 | 4.5 | Syscall table integrity (kprobes list) | **N** | — | /sys/kernel/debug/kprobes/list shows unexpected function hooks |
 | 4.6 | eBPF program enumeration | **N** | — | /sys/fs/bpf/ and bpftool; eBPF on syscall tracepoints can intercept/modify data before userspace |
 | 4.7 | DKMS third-party module persistence | **N** | — | /var/lib/dkms/ — modules that auto-rebuild on kernel updates |
@@ -113,7 +113,6 @@ These are feasible to implement within secy's file-reading architecture and woul
 
 | # | Threat | Difficulty | Impact |
 |---|--------|------------|--------|
-| 4.4 | /proc/modules vs /sys/module/ cross-check | Low | High — discrepancy reveals rootkit hiding from one source |
 | 7.5 | Package integrity verification | Medium | High — read /var/lib/dpkg/info/*.md5sums and compare against file hashes |
 | 4.8 | System-wide kernel taint bitmask | Low | Medium — single file read of /proc/sys/kernel/tainted |
 | 3.4 | Timestamp manipulation detection | Medium | Medium — stat each binary, flag mtime < ctime |
@@ -140,5 +139,5 @@ Require capabilities beyond file reading, or have limited applicability:
 | 3.9 | perms.sh runs getfacl | Flag ACLs that grant unexpected users access to sensitive files |
 | 3.10 | perms.sh runs lsattr | Flag immutable/append-only bits on non-standard files |
 | 4.8 | Per-module taint checked | Also decode /proc/sys/kernel/tainted system-wide bitmask |
-| 7.2 | Some cross-source awareness | Systematize: /proc/modules vs /sys/module/ |
+| 7.2 | kmod cross-check implemented; netconn uses host netns | Further cross-source techniques (e.g., /proc/net/tcp vs ss output) |
 | 7.3 | Name-based + behavioral + exe-based | fd analysis for all processes, not just known names |

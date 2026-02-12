@@ -1,0 +1,127 @@
+# Analyze loaded kernel modules for suspicious or surveillance-related entries
+# Usage: sread kmod
+
+run() {
+    require_root
+
+    local proc="/proc"
+    [[ -d "/host/proc" ]] && proc="/host/proc"
+
+    section_header "KERNEL MODULE ANALYSIS"
+
+    local modules_file="${proc}/modules"
+    if [[ ! -f "$modules_file" ]]; then
+        log_error "Cannot read ${modules_file}"
+        exit 1
+    fi
+
+    # ── Known suspicious module patterns ─────────────────────────────
+    local spy_patterns="keylog|logger|spy|monitor|hook|rootkit|hide|stealth|sniff|intercept|backdoor"
+
+    echo "--- Suspicious module name scan ---"
+    local suspicious
+    suspicious="$(grep -iE "$spy_patterns" "$modules_file" 2>/dev/null || true)"
+    if [[ -n "$suspicious" ]]; then
+        echo "$suspicious" | while read -r line; do
+            local mod_name
+            mod_name="$(echo "$line" | awk '{print $1}')"
+            echo "  [!] ${mod_name}: ${line}"
+        done
+    else
+        echo "  (none detected)"
+    fi
+    echo ""
+
+    # ── Input subsystem modules ──────────────────────────────────────
+    echo "--- Input subsystem modules (normal but worth auditing) ---"
+    local input_modules
+    input_modules="$(grep -iE '^(uinput|evdev|hid|keyboard|input)' "$modules_file" 2>/dev/null || true)"
+    if [[ -n "$input_modules" ]]; then
+        echo "$input_modules" | while read -r line; do
+            local mod_name mod_size mod_used
+            mod_name="$(echo "$line" | awk '{print $1}')"
+            mod_size="$(echo "$line" | awk '{print $2}')"
+            mod_used="$(echo "$line" | awk '{print $3}')"
+            echo "  ${mod_name} (size: ${mod_size}, used_by: ${mod_used})"
+        done
+    else
+        echo "  (none loaded)"
+    fi
+    echo ""
+
+    # ── Unsigned / out-of-tree modules ───────────────────────────────
+    echo "--- Out-of-tree / unsigned modules ---"
+    local oot_found=0
+    local sys_modules="${proc}/sys/module"
+    [[ -d "/host/sys/module" ]] && sys_modules="/host/sys/module"
+    if [[ -d "$sys_modules" ]]; then
+        while read -r line; do
+            local mod_name
+            mod_name="$(echo "$line" | awk '{print $1}')"
+            local taint_file="${sys_modules}/${mod_name}/taint"
+            if [[ -f "$taint_file" ]]; then
+                local taint
+                taint="$(cat "$taint_file" 2>/dev/null || echo "")"
+                # O = out-of-tree, E = unsigned
+                if [[ "$taint" == *O* ]] || [[ "$taint" == *E* ]]; then
+                    echo "  [!] ${mod_name} (taint: ${taint})"
+                    oot_found=$((oot_found + 1))
+                fi
+            fi
+        done < "$modules_file"
+    fi
+    [[ $oot_found -eq 0 ]] && echo "  (none detected — all modules appear in-tree and signed)"
+    echo ""
+
+    # ── /proc/modules vs /sys/module cross-verification ───────────────
+    # A rootkit that hooks procfs to hide from /proc/modules may forget
+    # to also hide from /sys/module (or vice versa). Discrepancies
+    # between these two sources are a strong rootkit indicator.
+    echo "--- /proc/modules vs /sys/module cross-check ---"
+    local hidden_from_sysfs=0
+    local hidden_from_proc=0
+    if [[ -d "$sys_modules" ]]; then
+        # Check: modules in /proc/modules but missing from /sys/module
+        while read -r line; do
+            local mod_name
+            mod_name="$(echo "$line" | awk '{print $1}')"
+            if [[ ! -d "${sys_modules}/${mod_name}" ]]; then
+                echo "  [!] ${mod_name} in /proc/modules but MISSING from /sys/module"
+                hidden_from_sysfs=$((hidden_from_sysfs + 1))
+            fi
+        done < "$modules_file"
+
+        # Check: loadable modules in /sys/module but missing from /proc/modules
+        # Built-in modules appear in /sys/module without a refcnt file;
+        # only flag entries that have refcnt (loadable) but aren't in /proc/modules
+        local proc_mod_names
+        proc_mod_names="$(awk '{print $1}' "$modules_file")"
+        for mod_dir in "${sys_modules}"/*/; do
+            [[ -d "$mod_dir" ]] || continue
+            # Only check loadable modules (have refcnt), skip built-ins
+            [[ -f "${mod_dir}/refcnt" ]] || continue
+            local mod_name
+            mod_name="$(basename "$mod_dir")"
+            if ! echo "$proc_mod_names" | grep -qx "$mod_name"; then
+                echo "  [!] ${mod_name} in /sys/module (loadable) but MISSING from /proc/modules"
+                hidden_from_proc=$((hidden_from_proc + 1))
+            fi
+        done
+    else
+        echo "  (skipped — /sys/module not accessible)"
+    fi
+    [[ $((hidden_from_sysfs + hidden_from_proc)) -eq 0 ]] && echo "  (consistent — no discrepancies)"
+    echo ""
+
+    # ── Module count summary ─────────────────────────────────────────
+    local total
+    total="$(wc -l < "$modules_file" | tr -d ' ')"
+    echo "--- Summary ---"
+    echo "  Total loaded modules: ${total}"
+    echo "  Out-of-tree/unsigned: ${oot_found}"
+    echo "  Hidden from sysfs: ${hidden_from_sysfs}"
+    echo "  Hidden from procfs: ${hidden_from_proc}"
+
+    echo ""
+    log_ok "Kernel module scan complete"
+}
