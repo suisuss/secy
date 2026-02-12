@@ -126,3 +126,46 @@ services:
     security_opt:
       - no-new-privileges:true
       - seccomp=unconfined
+
+  # ── Test profile ──────────────────────────────────────────────────
+  # docker compose --profile test run --rm secy-test
+
+  # Container pre-filled with simulated threat artifacts matching THREATS.md.
+  # Shares PID + network namespace with secy-test so sread can scan its
+  # processes and listeners.
+  threatlab:
+    build:
+      context: .
+      dockerfile: threatlab/Dockerfile
+    volumes:
+      - threatlab-fs:/export
+    healthcheck:
+      test: ["CMD", "test", "-f", "/export/.ready"]
+      interval: 1s
+      retries: 30
+    profiles: ["test"]
+
+  # Runs sread modules against threatlab artifacts and asserts expected
+  # detections. Exit 0 = all tests pass.
+  secy-test:
+    build: .
+    pid: "service:threatlab"
+    network_mode: "service:threatlab"
+    cap_add:
+      - DAC_READ_SEARCH
+      - SYS_PTRACE
+      - SYS_ADMIN
+    environment:
+      - SREAD_ROOT=/usr/local/lib/sread
+    volumes:
+      - threatlab-fs:/host:ro
+      - ./state:/var/lib/secy/state
+      - ./threatlab/run-tests.sh:/opt/threatlab/run-tests.sh:ro
+    depends_on:
+      threatlab:
+        condition: service_healthy
+    entrypoint: ["bash", "/opt/threatlab/run-tests.sh"]
+    profiles: ["test"]
+
+volumes:
+  threatlab-fs:
