@@ -203,6 +203,37 @@ run() {
     fi
     echo ""
 
+    # ── DKMS registered modules ───────────────────────────────────
+    # DKMS modules auto-rebuild on kernel updates, providing persistence
+    # across kernel upgrades. Legitimate uses include GPU drivers and
+    # VPN modules, but malicious modules can also use DKMS.
+    echo "--- DKMS registered modules ---"
+    local root=""
+    [[ -d "/host/var" ]] && root="/host"
+    local dkms_dir="${root}/var/lib/dkms"
+    local dkms_count=0
+    local dkms_suspicious=0
+    local dkms_allowlist="^(virtualbox|vboxguest|vboxdrv|nvidia|broadcom-sta|bcmwl|rtl[0-9]|zfs|wireguard|v4l2loopback|bbswitch|tp_smapi|acpi_call|evdi|dahdi|xtables-addons|drbd)$"
+    if [[ -d "$dkms_dir" ]]; then
+        for mod_dir in "${dkms_dir}"/*/; do
+            [[ -d "$mod_dir" ]] || continue
+            local mod_name
+            mod_name="$(basename "$mod_dir")"
+            [[ "$mod_name" == "kernel"* ]] && continue
+            dkms_count=$((dkms_count + 1))
+            if echo "$mod_name" | grep -qiE "$dkms_allowlist"; then
+                echo "  ${mod_name}"
+            else
+                echo "  [!] ${mod_name} (not in known-legitimate allowlist)"
+                dkms_suspicious=$((dkms_suspicious + 1))
+            fi
+        done
+        [[ $dkms_count -eq 0 ]] && echo "  (none registered)"
+    else
+        echo "  (DKMS not installed or ${dkms_dir} not accessible)"
+    fi
+    echo ""
+
     # ── Module count summary ─────────────────────────────────────────
     local total
     total="$(wc -l < "$modules_file" | tr -d ' ')"
@@ -213,6 +244,8 @@ run() {
     echo "  Hidden from procfs: ${hidden_from_proc}"
     echo "  Active kprobes: ${kprobe_count}"
     echo "  Sensitive function hooks: ${sensitive_kprobes}"
+    echo "  DKMS modules: ${dkms_count}"
+    echo "  DKMS suspicious: ${dkms_suspicious}"
 
     echo ""
     log_ok "Kernel module scan complete (kprobes: ${kprobe_count}, sensitive: ${sensitive_kprobes})"

@@ -72,7 +72,7 @@ Techniques for finding sophisticatedly hidden malicious programs on a Linux syst
 | 4.4 | /proc/modules vs /sys/module/ cross-verification | **Y** | `sread kmod` | Checks both directions; filters built-in modules via refcnt |
 | 4.5 | Syscall table integrity (kprobes list) | **P** | `sread kmod` | Enumerates active kprobes and kprobe events; flags hooks on sensitive functions; requires debugfs mount |
 | 4.6 | eBPF program enumeration | **P** | `sread ebpf` | Pinned BPF objects, bpftool prog list, active tracepoints, BPF sysctl; needs bpftool/debugfs for full coverage |
-| 4.7 | DKMS third-party module persistence | **N** | — | /var/lib/dkms/ — modules that auto-rebuild on kernel updates |
+| 4.7 | DKMS third-party module persistence | **Y** | `sread kmod` | Enumerates /var/lib/dkms/; allowlists known-legitimate drivers; flags unknown modules |
 | 4.8 | Kernel taint bitmask decoding | **Y** | `sread kmod` | Per-module taint flags + system-wide /proc/sys/kernel/tainted with full bitmask decode |
 
 ## 5. Network-level indicators

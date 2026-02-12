@@ -368,7 +368,7 @@ With `--deep`: also correlates fd socket inodes against `/host/proc/net/raw` and
 - Check if `/host/etc/ld.so.preload` exists — it should NOT on a normal system. Libraries listed here are injected into every process.
 - Read `/host/proc/[pid]/environ` for any process with `LD_PRELOAD=` set.
 
-**Kernel modules** (`sread kmod`) performs six checks:
+**Kernel modules** (`sread kmod`) performs seven checks:
 
 1. **Suspicious names** — reads `/host/proc/modules`, flags modules matching: keylog, spy, hook, rootkit, hide, stealth, sniff, intercept, backdoor.
 
@@ -381,6 +381,8 @@ With `--deep`: also correlates fd socket inodes against `/host/proc/net/raw` and
 5. **Active kprobes** — reads `/host/sys/kernel/debug/kprobes/list`; flags hooks on sensitive kernel functions (`sys_execve`, `sys_open`, `sys_connect`, `vfs_read`, `vfs_write`, `tcp_sendmsg`, `security_*`). Requires debugfs.
 
 6. **Kprobe tracing events** — reads `/host/sys/kernel/debug/tracing/kprobe_events` for dynamically configured kprobe trace points.
+
+7. **DKMS persistence** — enumerates `/host/var/lib/dkms/` for registered third-party modules that auto-rebuild on kernel updates. Allowlists known-legitimate drivers (nvidia, virtualbox, wireguard, zfs, etc.); flags unknown modules.
 
 **eBPF programs** (`sread ebpf`) checks four areas:
 
