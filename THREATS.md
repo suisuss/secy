@@ -68,7 +68,7 @@ Techniques for finding sophisticatedly hidden malicious programs on a Linux syst
 | 4.5 | Syscall table integrity (kprobes list) | **N** | — | /sys/kernel/debug/kprobes/list shows unexpected function hooks |
 | 4.6 | eBPF program enumeration | **N** | — | /sys/fs/bpf/ and bpftool; eBPF on syscall tracepoints can intercept/modify data before userspace |
 | 4.7 | DKMS third-party module persistence | **N** | — | /var/lib/dkms/ — modules that auto-rebuild on kernel updates |
-| 4.8 | Kernel taint bitmask decoding | **P** | `sread kmod` checks per-module taint | Doesn't read /proc/sys/kernel/tainted (system-wide bitmask) |
+| 4.8 | Kernel taint bitmask decoding | **Y** | `sread kmod` | Per-module taint flags + system-wide /proc/sys/kernel/tainted with full bitmask decode |
 
 ## 5. Network-level indicators
 
@@ -114,7 +114,6 @@ These are feasible to implement within secy's file-reading architecture and woul
 | # | Threat | Difficulty | Impact |
 |---|--------|------------|--------|
 | 7.5 | Package integrity verification | Medium | High — read /var/lib/dpkg/info/*.md5sums and compare against file hashes |
-| 4.8 | System-wide kernel taint bitmask | Low | Medium — single file read of /proc/sys/kernel/tainted |
 | 3.4 | Timestamp manipulation detection | Medium | Medium — stat each binary, flag mtime < ctime |
 | 3.8 | /dev/shm scan (not exclude) | Low | Medium — dedicated scan of /dev/shm for executables and payloads |
 
@@ -138,6 +137,5 @@ Require capabilities beyond file reading, or have limited applicability:
 | 3.8 | world.sh excludes /dev/shm | Add dedicated /dev/shm scan for executables, scripts, ELF binaries |
 | 3.9 | perms.sh runs getfacl | Flag ACLs that grant unexpected users access to sensitive files |
 | 3.10 | perms.sh runs lsattr | Flag immutable/append-only bits on non-standard files |
-| 4.8 | Per-module taint checked | Also decode /proc/sys/kernel/tainted system-wide bitmask |
 | 7.2 | kmod cross-check implemented; netconn uses host netns | Further cross-source techniques (e.g., /proc/net/tcp vs ss output) |
 | 7.3 | Name-based + behavioral + exe-based | fd analysis for all processes, not just known names |

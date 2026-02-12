@@ -113,6 +113,52 @@ run() {
     [[ $((hidden_from_sysfs + hidden_from_proc)) -eq 0 ]] && echo "  (consistent — no discrepancies)"
     echo ""
 
+    # ── System-wide kernel taint bitmask ──────────────────────────────
+    # /proc/sys/kernel/tainted is a bitmask summarizing whether the
+    # kernel has been tainted by any out-of-tree, unsigned, or forced
+    # module loads. Non-zero values warrant investigation.
+    echo "--- System-wide kernel taint flags ---"
+    local taint_file="${proc}/sys/kernel/tainted"
+    if [[ -f "$taint_file" ]]; then
+        local taint_val
+        taint_val="$(cat "$taint_file" 2>/dev/null || echo "?")"
+        if [[ "$taint_val" == "0" ]]; then
+            echo "  Taint value: 0 (clean)"
+        else
+            echo "  [!] Taint value: ${taint_val}"
+            # Decode known bits (from kernel Documentation/admin-guide/tainted-kernels.rst)
+            local -a taint_bits=(
+                "proprietary module loaded"
+                "module force-loaded"
+                "kernel running on out-of-spec system"
+                "module force-unloaded"
+                "processor reported MCE"
+                "bad page found (hardware memory error)"
+                "user requested taint"
+                "kernel died recently (OOPS or BUG)"
+                "ACPI table overridden by user"
+                "kernel issued warning"
+                "staging driver loaded"
+                "workaround for platform firmware bug applied"
+                "unsigned module loaded"
+                "soft lockup occurred"
+                "kernel live-patched"
+                "auxiliary taint (platform-specific)"
+                "struct randomization plugin in use"
+                "in-kernel test run"
+            )
+            local i
+            for i in "${!taint_bits[@]}"; do
+                if (( taint_val & (1 << i) )); then
+                    echo "      bit ${i}: ${taint_bits[$i]}"
+                fi
+            done
+        fi
+    else
+        echo "  (cannot read ${taint_file})"
+    fi
+    echo ""
+
     # ── Module count summary ─────────────────────────────────────────
     local total
     total="$(wc -l < "$modules_file" | tr -d ' ')"
