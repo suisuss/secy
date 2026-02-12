@@ -107,12 +107,6 @@ Techniques for finding sophisticatedly hidden malicious programs on a Linux syst
 
 ## Gap summary
 
-### Not covered (high value)
-
-These are feasible to implement within secy's file-reading architecture and would catch threats that bypass current detection:
-
-| # | Threat | Difficulty | Impact |
-|---|--------|------------|--------|
 ### Not covered (specialized)
 
 Require capabilities beyond file reading, or have limited applicability:
