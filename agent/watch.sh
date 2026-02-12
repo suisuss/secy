@@ -56,28 +56,20 @@ fi
 # ── Preflight ────────────────────────────────────────────────────
 
 preflight_watch() {
-    if [[ $EUID -ne 0 ]]; then
-        watch_log "ERROR: watch must run as root (run inside Docker container)"
-        exit 1
-    fi
-
-    if [[ ! -d "/host/etc" ]]; then
-        watch_log "ERROR: Host filesystem not found at /host"
-        exit 1
-    fi
+    preflight_core
 
     if ! command -v sha256sum &>/dev/null; then
-        watch_log "ERROR: sha256sum not found"
+        secy_log "watch" "ERROR: sha256sum not found"
         exit 1
     fi
 
     if ! command -v file &>/dev/null; then
-        watch_log "WARNING: file(1) not found — classification will be limited"
+        secy_log "watch" "WARNING: file(1) not found — classification will be limited"
     fi
 
     if [[ "$NO_CLAUDE" != "true" ]]; then
         if ! command -v claude &>/dev/null; then
-            watch_log "WARNING: claude not found — falling back to --no-claude mode"
+            secy_log "watch" "WARNING: claude not found — falling back to --no-claude mode"
             NO_CLAUDE=true
         fi
     fi
@@ -91,7 +83,7 @@ preflight_watch() {
         fi
     done
     if [[ "$found" != "true" ]]; then
-        watch_log "WARNING: No Downloads directories found at /host/home/*/Downloads/"
+        secy_log "watch" "WARNING: No Downloads directories found at /host/home/*/Downloads/"
     fi
 }
 
@@ -131,7 +123,7 @@ scan_downloads() {
             local prev_size
             prev_size="$(get_seen_size "$filepath")"
             if [[ -n "$prev_size" ]] && [[ "$prev_size" != "$filesize" ]]; then
-                watch_log "Size changed: ${filepath} (${prev_size} -> ${filesize}), re-hashing"
+                secy_log "watch" "Size changed: ${filepath} (${prev_size} -> ${filesize}), re-hashing"
             fi
 
             (( new_files++ ))
@@ -139,7 +131,7 @@ scan_downloads() {
             # Compute SHA256
             local hash
             hash="$(sha256sum "$filepath" 2>/dev/null | awk '{print $1}')" || {
-                watch_log "WARNING: Failed to hash ${filepath}"
+                secy_log "watch" "WARNING: Failed to hash ${filepath}"
                 continue
             }
 
@@ -170,9 +162,9 @@ scan_downloads() {
                         mime="$(file --mime-type -b "$filepath" 2>/dev/null || echo 'unknown')"
                         enqueue_file "$hash" "$filepath" "$mime"
                         (( queued++ ))
-                        watch_log "Queued for analysis: ${filepath} (${mime})"
+                        secy_log "watch" "Queued for analysis: ${filepath} (${mime})"
                     else
-                        watch_log "New file (no-claude): ${filepath} [${classification}]"
+                        secy_log "watch" "New file (no-claude): ${filepath} [${classification}]"
                     fi
                     ;;
                 SKIP_MEDIA)
@@ -180,7 +172,7 @@ scan_downloads() {
                     ;;
                 SKIP_TINY|SKIP_LARGE|SKIP_OTHER)
                     (( skipped++ ))
-                    watch_log "Skipped: ${filepath} [${classification}]"
+                    secy_log "watch" "Skipped: ${filepath} [${classification}]"
                     ;;
             esac
 
@@ -206,7 +198,7 @@ analyze_batch() {
 
     local file_count
     file_count="$(echo "$batch_data" | wc -l)"
-    watch_log "Analyzing batch of ${file_count} file(s) with Claude"
+    secy_log "watch" "Analyzing batch of ${file_count} file(s) with Claude"
 
     local timestamp
     timestamp="$(date +%Y-%m-%d-%H%M%S)"
@@ -243,7 +235,7 @@ ${info}
     # Assemble prompt
     local watch_prompt="${AGENT_DIR}/WATCH.md"
     if [[ ! -f "$watch_prompt" ]]; then
-        watch_log "ERROR: Watch prompt not found at ${watch_prompt}"
+        secy_log "watch" "ERROR: Watch prompt not found at ${watch_prompt}"
         return
     fi
 
@@ -275,67 +267,37 @@ ${file_details}
 5. Output SECY_COMPLETE when done
 "
 
-    # Build claude command
-    local claude_cmd="claude"
-    if command -v srt &>/dev/null; then
-        if srt -- echo srt-ok >/dev/null 2>&1; then
-            claude_cmd="srt claude"
-        fi
-    fi
-
-    local stream_formatter="${AGENT_DIR}/lib/format-stream.sh"
-
-    $claude_cmd \
-        --dangerously-skip-permissions \
-        --print \
-        --verbose \
-        --output-format stream-json \
-        --model "$CLAUDE_MODEL" \
-        --max-budget-usd "$MAX_BUDGET_USD" \
-        --tools "$ALLOWED_TOOLS" \
-        --system-prompt "$system_prompt" \
-        -p "$prompt" \
-        | bash "$stream_formatter" >&2 || true
+    invoke_claude "$system_prompt" "$prompt" "$MAX_BUDGET_USD" > /dev/null
 
     if [[ -f "$findings_file" ]]; then
-        watch_log "Triage report written: ${findings_file}"
+        secy_log "watch" "Triage report written: ${findings_file}"
     else
-        watch_log "WARNING: Claude did not write findings to ${findings_file}"
+        secy_log "watch" "WARNING: Claude did not write findings to ${findings_file}"
     fi
 }
-
-# ── Signal handling ──────────────────────────────────────────────
-
-RUNNING=true
-
-cleanup() {
-    RUNNING=false
-    watch_log "Shutting down (received signal)"
-}
-
-trap cleanup SIGTERM SIGINT SIGHUP
 
 # ── Main daemon loop ─────────────────────────────────────────────
 
 main() {
     preflight_watch
     init_watch_state
+    daemon_init
 
-    watch_log "Watch daemon starting"
-    watch_log "  Poll interval: ${WATCH_POLL_INTERVAL}s"
-    watch_log "  Max file size: ${WATCH_MAX_FILE_SIZE} bytes"
-    watch_log "  Batch size:    ${WATCH_BATCH_SIZE}"
-    watch_log "  Scan depth:    ${WATCH_SCAN_DEPTH}"
-    watch_log "  Claude:        $(if [[ "$NO_CLAUDE" == "true" ]]; then echo "disabled"; else echo "enabled"; fi)"
-    watch_log "  Scanning:      /host/home/*/Downloads/"
+    secy_log "watch" "Watch daemon starting"
+    secy_log "watch" "  Poll interval: ${WATCH_POLL_INTERVAL}s"
+    secy_log "watch" "  Max file size: ${WATCH_MAX_FILE_SIZE} bytes"
+    secy_log "watch" "  Batch size:    ${WATCH_BATCH_SIZE}"
+    secy_log "watch" "  Scan depth:    ${WATCH_SCAN_DEPTH}"
+    secy_log "watch" "  Claude:        $(if [[ "$NO_CLAUDE" == "true" ]]; then echo "disabled"; else echo "enabled"; fi)"
+    secy_log "watch" "  Scanning:      /host/home/*/Downloads/"
 
-    while [[ "$RUNNING" == "true" ]]; do
+    while [[ "$SECY_DAEMON_RUNNING" == "true" ]]; do
         # Scan for new files
         _SCAN_NEW=0 _SCAN_MATCHES=0 _SCAN_QUEUED=0 _SCAN_SKIPPED=0
         scan_downloads
 
         if [[ $_SCAN_NEW -gt 0 ]]; then
-            watch_log "Scan: ${_SCAN_NEW} new, ${_SCAN_MATCHES} malware match(es), ${_SCAN_QUEUED} queued, ${_SCAN_SKIPPED} skipped"
+            secy_log "watch" "Scan: ${_SCAN_NEW} new, ${_SCAN_MATCHES} malware match(es), ${_SCAN_QUEUED} queued, ${_SCAN_SKIPPED} skipped"
         fi
 
         # If there are queued files and Claude is enabled, analyze them
@@ -348,14 +310,10 @@ main() {
         fi
 
         # Sleep with interruptible wait
-        local i=0
-        while [[ "$RUNNING" == "true" ]] && [[ $i -lt $WATCH_POLL_INTERVAL ]]; do
-            sleep 1
-            (( i++ ))
-        done
+        interruptible_sleep "$WATCH_POLL_INTERVAL"
     done
 
-    watch_log "Watch daemon stopped"
+    secy_log "watch" "Watch daemon stopped"
 }
 
 main

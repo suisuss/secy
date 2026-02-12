@@ -61,7 +61,7 @@ run_agent() {
 
     # Monitor mode requires a baseline
     if [[ "$mode" == "monitor" ]] && [[ ! -f "${STATE_DIR}/baseline/baseline.meta" ]]; then
-        log_agent "ERROR: No baseline found. Run 'secy baseline' first."
+        secy_log "" "ERROR: No baseline found. Run 'secy baseline' first."
         exit 1
     fi
 
@@ -78,16 +78,16 @@ run_agent() {
 
     local agent_prompt="${AGENT_DIR}/AGENT.md"
     if [[ ! -f "$agent_prompt" ]]; then
-        log_agent "ERROR: Agent prompt not found at ${agent_prompt}"
+        secy_log "" "ERROR: Agent prompt not found at ${agent_prompt}"
         exit 1
     fi
 
-    log_agent "Starting ${mode} (max ${max_iterations} iterations)"
+    secy_log "" "Starting ${mode} (max ${max_iterations} iterations)"
 
     local completed=false
 
     for i in $(seq 1 "$max_iterations"); do
-        log_agent "Iteration ${i}/${max_iterations}"
+        secy_log "" "Iteration ${i}/${max_iterations}"
 
         local prompt
         prompt="$(assemble_prompt "$mode" "$i" "$max_iterations" "$timestamp")"
@@ -95,55 +95,23 @@ run_agent() {
         local system_prompt
         system_prompt="$(cat "$agent_prompt")"
 
-        # Build claude command — use srt wrapper if available and working
-        local claude_cmd="claude"
-        if command -v srt &>/dev/null; then
-            if srt -- echo srt-ok >/dev/null 2>&1; then
-                claude_cmd="srt claude"
-                log_agent "Using srt sandbox"
-            else
-                log_agent "srt available but sandbox failed (Docker is the sandbox boundary)"
-            fi
-        else
-            log_agent "Running without srt (Docker is the sandbox boundary)"
-        fi
-
-        local stream_formatter="${AGENT_DIR}/lib/format-stream.sh"
-
-        local raw_json
-        raw_json="$(mktemp)"
-
-        $claude_cmd \
-            --dangerously-skip-permissions \
-            --print \
-            --verbose \
-            --output-format stream-json \
-            --model "$CLAUDE_MODEL" \
-            --max-budget-usd "$MAX_BUDGET_USD" \
-            --tools "$ALLOWED_TOOLS" \
-            --system-prompt "$system_prompt" \
-            -p "$prompt" \
-            | tee "$raw_json" \
-            | bash "$stream_formatter" >&2 || true
-
         local output
-        output="$(cat "$raw_json")"
-        rm -f "$raw_json"
+        output="$(invoke_claude "$system_prompt" "$prompt" "$MAX_BUDGET_USD")"
 
         if check_completion "$output"; then
-            log_agent "Agent signaled completion at iteration ${i}"
+            secy_log "" "Agent signaled completion at iteration ${i}"
             completed=true
             break
         fi
 
         if [[ $i -lt $max_iterations ]]; then
-            log_agent "Sleeping ${ITERATION_SLEEP}s before next iteration"
+            secy_log "" "Sleeping ${ITERATION_SLEEP}s before next iteration"
             sleep "$ITERATION_SLEEP"
         fi
     done
 
     if [[ "$completed" != "true" ]]; then
-        log_agent "WARNING: Agent did not signal completion within ${max_iterations} iterations"
+        secy_log "" "WARNING: Agent did not signal completion within ${max_iterations} iterations"
     fi
 
     # Print summary if a findings file was created
@@ -167,10 +135,10 @@ run_agent() {
         echo ""
     elif [[ "$mode" == "baseline" ]]; then
         echo ""
-        log_agent "Baseline captured to ${STATE_DIR}/baseline/"
+        secy_log "" "Baseline captured to ${STATE_DIR}/baseline/"
     fi
 
-    log_agent "Done"
+    secy_log "" "Done"
 }
 
 # ── Entry point ───────────────────────────────────────────────────

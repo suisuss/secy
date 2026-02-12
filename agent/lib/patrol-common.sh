@@ -1,18 +1,9 @@
 #!/usr/bin/env bash
 # agent/lib/patrol-common.sh — Shared utilities for the patrol daemon
 
-set -euo pipefail
-
-AGENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-if [[ -z "${SREAD_ROOT:-}" ]]; then
-    SREAD_ROOT="$(cd "${AGENT_DIR}/../sread" && pwd)"
-fi
-export SREAD_ROOT
-
-source "${AGENT_DIR}/conf/agent.conf"
+source "${BASH_SOURCE[0]%/*}/secy-common.sh"
 
 PATROL_STATE_DIR="${STATE_DIR}/patrol"
-PATROL_LOG_FILE="${PATROL_STATE_DIR}/patrol.log"
 PATROL_SCHEDULE="${PATROL_STATE_DIR}/schedule.conf"
 PATROL_RUNS_DIR="${PATROL_STATE_DIR}/runs"
 PATROL_DIFFS_DIR="${PATROL_STATE_DIR}/diffs"
@@ -45,20 +36,6 @@ netconn        300               high
 desktop        1800              low
 surveil        1800              low"
 
-# ── Logging ──────────────────────────────────────────────────────
-
-patrol_log() {
-    local msg="[secy:patrol $(date -Iseconds)] $*"
-    echo "$msg" >&2
-    if [[ -d "$PATROL_STATE_DIR" ]]; then
-        # Rotate if log exceeds 1MB
-        if [[ -f "$PATROL_LOG_FILE" ]] && [[ "$(stat -c%s "$PATROL_LOG_FILE" 2>/dev/null || echo 0)" -gt 1048576 ]]; then
-            mv "$PATROL_LOG_FILE" "${PATROL_LOG_FILE}.1" 2>/dev/null || true
-        fi
-        echo "$msg" >> "$PATROL_LOG_FILE" 2>/dev/null || true
-    fi
-}
-
 # ── State directory management ───────────────────────────────────
 
 init_patrol_state() {
@@ -69,10 +46,10 @@ init_patrol_state() {
 
     if [[ ! -f "$PATROL_SCHEDULE" ]]; then
         echo "$DEFAULT_SCHEDULE" > "$PATROL_SCHEDULE"
-        patrol_log "Wrote default schedule to ${PATROL_SCHEDULE}"
+        secy_log "patrol" "Wrote default schedule to ${PATROL_SCHEDULE}"
     fi
 
-    patrol_log "State initialized at ${PATROL_STATE_DIR}"
+    secy_log "patrol" "State initialized at ${PATROL_STATE_DIR}"
 }
 
 # ── Schedule parsing ─────────────────────────────────────────────
@@ -104,7 +81,7 @@ load_schedule() {
             # Fall back to checking if module file exists
             local mod_file="${SREAD_ROOT}/lib/modules/${module}.sh"
             if [[ ! -f "$mod_file" ]]; then
-                patrol_log "WARNING: Unknown module '${module}' in schedule — skipping"
+                secy_log "patrol" "WARNING: Unknown module '${module}' in schedule — skipping"
                 continue
             fi
         fi
@@ -114,7 +91,7 @@ load_schedule() {
         SCHED_PRIORITIES+=("${priority:-medium}")
     done < "$PATROL_SCHEDULE"
 
-    patrol_log "Loaded ${#SCHED_MODULES[@]} modules from schedule"
+    secy_log "patrol" "Loaded ${#SCHED_MODULES[@]} modules from schedule"
 }
 
 # ── Module execution ─────────────────────────────────────────────
@@ -150,7 +127,7 @@ run_module() {
     sread "$module" > "$latest" 2>/dev/null || exit_code=$?
 
     if [[ $exit_code -ne 0 ]] && [[ ! -s "$latest" ]]; then
-        patrol_log "WARNING: Module '${module}' failed (exit ${exit_code})"
+        secy_log "patrol" "WARNING: Module '${module}' failed (exit ${exit_code})"
         # Restore previous as latest so we don't lose state
         if [[ -f "$previous" ]]; then
             mv "$previous" "$latest"
@@ -177,11 +154,11 @@ run_module() {
                 echo "$diff_output"
             } > "$diff_file"
 
-            patrol_log "Change detected: ${module} (${priority} priority)"
+            secy_log "patrol" "Change detected: ${module} (${priority} priority)"
             return 0
         fi
     else
-        patrol_log "First run for module '${module}' — baseline captured"
+        secy_log "patrol" "First run for module '${module}' — baseline captured"
     fi
 
     return 0
@@ -192,7 +169,7 @@ run_module() {
 # Run all modules once on first start to populate baseline outputs.
 
 run_init_scan() {
-    patrol_log "Running initial scan (populating baselines for all modules)"
+    secy_log "patrol" "Running initial scan (populating baselines for all modules)"
 
     local count=0
     local total=${#SCHED_MODULES[@]}
@@ -207,17 +184,17 @@ run_init_scan() {
         # Only run if no latest.out exists
         if [[ ! -f "${module_dir}/latest.out" ]]; then
             (( count++ ))
-            patrol_log "Init scan [${count}/${total}]: ${module}"
+            secy_log "patrol" "Init scan [${count}/${total}]: ${module}"
             sread "$module" > "${module_dir}/latest.out" 2>/dev/null || {
-                patrol_log "WARNING: Init scan failed for '${module}'"
+                secy_log "patrol" "WARNING: Init scan failed for '${module}'"
             }
         fi
     done
 
     if [[ $count -eq 0 ]]; then
-        patrol_log "All modules already have baseline data — skipping init scan"
+        secy_log "patrol" "All modules already have baseline data — skipping init scan"
     else
-        patrol_log "Init scan complete: ${count} module(s) baselined"
+        secy_log "patrol" "Init scan complete: ${count} module(s) baselined"
     fi
 }
 
@@ -305,7 +282,7 @@ run_claude_review() {
     local diff_count
     diff_count="$(count_pending_diffs)"
 
-    patrol_log "Starting Claude review of ${diff_count} diff(s)"
+    secy_log "patrol" "Starting Claude review of ${diff_count} diff(s)"
 
     local diffs
     diffs="$(assemble_diffs)"
@@ -316,7 +293,7 @@ run_claude_review() {
 
     local patrol_prompt="${AGENT_DIR}/PATROL.md"
     if [[ ! -f "$patrol_prompt" ]]; then
-        patrol_log "ERROR: Patrol prompt not found at ${patrol_prompt}"
+        secy_log "patrol" "ERROR: Patrol prompt not found at ${patrol_prompt}"
         return 1
     fi
 
@@ -342,32 +319,12 @@ ${diffs}
 5. Output SECY_COMPLETE when done
 "
 
-    # Build claude command
-    local claude_cmd="claude"
-    if command -v srt &>/dev/null; then
-        if srt -- echo srt-ok >/dev/null 2>&1; then
-            claude_cmd="srt claude"
-        fi
-    fi
-
-    local stream_formatter="${AGENT_DIR}/lib/format-stream.sh"
-
-    $claude_cmd \
-        --dangerously-skip-permissions \
-        --print \
-        --verbose \
-        --output-format stream-json \
-        --model "$CLAUDE_MODEL" \
-        --max-budget-usd "$review_budget" \
-        --tools "$ALLOWED_TOOLS" \
-        --system-prompt "$system_prompt" \
-        -p "$prompt" \
-        | bash "$stream_formatter" >&2 || true
+    invoke_claude "$system_prompt" "$prompt" "$review_budget" > /dev/null
 
     if [[ -f "$findings_file" ]]; then
-        patrol_log "Review complete: ${findings_file}"
+        secy_log "patrol" "Review complete: ${findings_file}"
     else
-        patrol_log "WARNING: Claude did not write findings to ${findings_file}"
+        secy_log "patrol" "WARNING: Claude did not write findings to ${findings_file}"
     fi
 
     # Clear reviewed diffs and mark review done

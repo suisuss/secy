@@ -76,39 +76,20 @@ fi
 # ── Preflight ────────────────────────────────────────────────────
 
 preflight_patrol() {
-    if [[ $EUID -ne 0 ]]; then
-        patrol_log "ERROR: patrol must run as root (run inside Docker container)"
-        exit 1
-    fi
-
-    if [[ ! -d "/host/etc" ]]; then
-        patrol_log "ERROR: Host filesystem not found at /host"
-        exit 1
-    fi
+    preflight_core
 
     if ! command -v sread &>/dev/null; then
-        patrol_log "ERROR: sread not found in PATH"
+        secy_log "patrol" "ERROR: sread not found in PATH"
         exit 1
     fi
 
     if [[ "$NO_CLAUDE" != "true" ]]; then
         if ! command -v claude &>/dev/null; then
-            patrol_log "WARNING: claude not found — falling back to --no-claude mode"
+            secy_log "patrol" "WARNING: claude not found — falling back to --no-claude mode"
             NO_CLAUDE=true
         fi
     fi
 }
-
-# ── Signal handling ──────────────────────────────────────────────
-
-RUNNING=true
-
-cleanup() {
-    RUNNING=false
-    patrol_log "Shutting down (received signal)"
-}
-
-trap cleanup SIGTERM SIGINT SIGHUP
 
 # ── Main daemon loop ─────────────────────────────────────────────
 
@@ -116,31 +97,32 @@ main() {
     preflight_patrol
     init_patrol_state
     load_schedule
+    daemon_init
 
     if [[ ${#SCHED_MODULES[@]} -eq 0 ]]; then
-        patrol_log "ERROR: No valid modules in schedule — nothing to patrol"
+        secy_log "patrol" "ERROR: No valid modules in schedule — nothing to patrol"
         exit 1
     fi
 
-    patrol_log "Patrol daemon starting"
-    patrol_log "  Tick interval:   ${PATROL_TICK_INTERVAL}s"
-    patrol_log "  Review interval: ${PATROL_REVIEW_INTERVAL}s"
-    patrol_log "  Review budget:   \$${PATROL_REVIEW_BUDGET_USD}"
-    patrol_log "  Modules:         ${#SCHED_MODULES[@]}"
-    patrol_log "  Claude:          $(if [[ "$NO_CLAUDE" == "true" ]]; then echo "disabled"; else echo "enabled"; fi)"
+    secy_log "patrol" "Patrol daemon starting"
+    secy_log "patrol" "  Tick interval:   ${PATROL_TICK_INTERVAL}s"
+    secy_log "patrol" "  Review interval: ${PATROL_REVIEW_INTERVAL}s"
+    secy_log "patrol" "  Review budget:   \$${PATROL_REVIEW_BUDGET_USD}"
+    secy_log "patrol" "  Modules:         ${#SCHED_MODULES[@]}"
+    secy_log "patrol" "  Claude:          $(if [[ "$NO_CLAUDE" == "true" ]]; then echo "disabled"; else echo "enabled"; fi)"
 
     # Phase 1: Init — run all modules once if no prior state
     run_init_scan
 
     # Phase 2+3: Continuous loop — run due modules, review diffs
-    while [[ "$RUNNING" == "true" ]]; do
+    while [[ "$SECY_DAEMON_RUNNING" == "true" ]]; do
         local now
         now="$(date +%s)"
         local modules_run=0
 
         # Check each scheduled module
         for i in "${!SCHED_MODULES[@]}"; do
-            [[ "$RUNNING" == "true" ]] || break
+            [[ "$SECY_DAEMON_RUNNING" == "true" ]] || break
 
             local module="${SCHED_MODULES[$i]}"
             local interval="${SCHED_INTERVALS[$i]}"
@@ -157,7 +139,7 @@ main() {
         done
 
         if [[ $modules_run -gt 0 ]]; then
-            patrol_log "Tick: ran ${modules_run} module(s)"
+            secy_log "patrol" "Tick: ran ${modules_run} module(s)"
         fi
 
         # Phase 3: Review gate — invoke Claude if meaningful diffs accumulated
@@ -168,14 +150,10 @@ main() {
         fi
 
         # Interruptible sleep (tick interval)
-        local i=0
-        while [[ "$RUNNING" == "true" ]] && [[ $i -lt $PATROL_TICK_INTERVAL ]]; do
-            sleep 1
-            (( i++ ))
-        done
+        interruptible_sleep "$PATROL_TICK_INTERVAL"
     done
 
-    patrol_log "Patrol daemon stopped"
+    secy_log "patrol" "Patrol daemon stopped"
 }
 
 main

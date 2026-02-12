@@ -1,48 +1,21 @@
 #!/usr/bin/env bash
 # secy/lib/agent-common.sh — Shared functions for the agent loop
 
-set -euo pipefail
-
-AGENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-# SREAD_ROOT can be set externally (e.g. in Docker where agent and sread are separate)
-if [[ -z "${SREAD_ROOT:-}" ]]; then
-    SREAD_ROOT="$(cd "${AGENT_DIR}/../sread" && pwd)"
-fi
-export SREAD_ROOT
-
-source "${AGENT_DIR}/conf/agent.conf"
-
-# ── Logging ───────────────────────────────────────────────────────
-
-log_agent() {
-    echo "[secy $(date -Iseconds)] $*" >&2
-}
+source "${BASH_SOURCE[0]%/*}/secy-common.sh"
 
 # ── Preflight checks ─────────────────────────────────────────────
 
 preflight_check() {
-    local missing=false
+    preflight_core
 
+    local missing=false
     for cmd in claude srt sread; do
         if ! command -v "$cmd" &>/dev/null; then
-            log_agent "ERROR: '${cmd}' not found in PATH"
+            secy_log "" "ERROR: '${cmd}' not found in PATH"
             missing=true
         fi
     done
-
     if [[ "$missing" == "true" ]]; then
-        exit 1
-    fi
-
-    if [[ $EUID -ne 0 ]]; then
-        log_agent "ERROR: secy must run as root (run inside Docker container)"
-        exit 1
-    fi
-
-    # Verify host filesystem is mounted
-    if [[ ! -d "/host/etc" ]]; then
-        log_agent "ERROR: Host filesystem not found at /host"
-        log_agent "       Run via: docker compose run secy <mode>"
         exit 1
     fi
 }
@@ -66,14 +39,14 @@ acquire_lock() {
             local pid
             pid="$(cat "$pidfile")"
             if kill -0 "$pid" 2>/dev/null; then
-                log_agent "ERROR: secy already running (pid ${pid})"
+                secy_log "" "ERROR: secy already running (pid ${pid})"
                 exit 1
             fi
             # Stale lock from crashed run
-            log_agent "Removing stale lock (pid ${pid} not running)"
+            secy_log "" "Removing stale lock (pid ${pid} not running)"
         fi
         rm -rf "$lockdir"
-        mkdir "$lockdir" || { log_agent "ERROR: could not acquire lock"; exit 1; }
+        mkdir "$lockdir" || { secy_log "" "ERROR: could not acquire lock"; exit 1; }
     fi
     echo $$ > "${lockdir}/pid"
 }
