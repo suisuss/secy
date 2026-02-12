@@ -94,6 +94,7 @@ _show_capabilities() {
     echo "  - Analyze kernel modules, kprobes, and DKMS persistence"
     echo "  - Enumerate eBPF programs and security-relevant BPF tracepoints"
     echo "  - Scan for suspicious extended attributes (xattrs) on system binaries"
+    echo "  - Detect bind mounts hiding files and suspicious mount overlaps"
     echo "  - Enumerate autostart persistence (XDG, systemd user, init.d)"
     echo "  - Analyze established network connections with process attribution"
     echo "  - Audit desktop environment (remote desktop, browser extensions)"

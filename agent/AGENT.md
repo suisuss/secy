@@ -120,6 +120,7 @@ sread autostart            # XDG autostart, systemd user services, rc.local, ini
 sread netconn              # Established connections with process attribution
 sread desktop              # Remote desktop, screen recording, browser extensions
 sread xattr                # Extended attributes on system binaries and temp dirs
+sread mounts               # Bind mounts, mount overlaps, system directory mount types
 
 # Integrity and tampering
 sread pkgverify            # Verify critical package checksums against dpkg md5sums
@@ -342,6 +343,7 @@ sread autostart            # XDG autostart, systemd user services, rc.local, ini
 sread netconn              # Established connections with process attribution
 sread desktop              # Remote desktop, screen recording, browser extensions
 sread xattr                # Extended attributes on system binaries and temp dirs
+sread mounts               # Bind mounts, mount overlaps, system directory mount types
 sread surveil              # Run all of the above
 ```
 
@@ -404,6 +406,12 @@ With `--deep`: also correlates fd socket inodes against `/host/proc/net/raw` and
 3. **Temp directory xattrs** — scans `/tmp`, `/dev/shm`, `/var/tmp` for files with non-standard xattrs.
 
 Degrades gracefully if `getfattr` (attr package) is not installed.
+
+**Mount analysis** (`sread mounts`) detects filesystem-level hiding:
+
+1. **Bind mounts** — parses `/host/proc/1/mountinfo` for mounts with root != "/" (bind mount indicator). Flags bind mounts over sensitive system paths (`/usr/bin`, `/usr/sbin`, `/etc`, `/lib`, `/boot`).
+2. **Overlapping mounts** — finds parent-child mount point pairs on the same device, which can shadow directory contents.
+3. **System directory types** — informational summary of filesystem types mounted on system directories.
 
 **Persistence mechanisms**:
 - XDG autostart: `/host/etc/xdg/autostart/*.desktop` and `/host/home/[user]/.config/autostart/*.desktop` — parse `Name=` and `Exec=` fields

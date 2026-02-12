@@ -1,6 +1,6 @@
 # Threat Detection Index
 
-Techniques for finding sophisticatedly hidden malicious programs on a Linux system, mapped to where (if anywhere) secy addresses them.
+Techniques for finding sophisticatedly hidden malicious programs on a Linux system, mapped to where (if anywhere) secy addresses them. See [THREATS-DEPTH.md](THREATS-DEPTH.md) for detailed explanations, detection methods, and remediation for each technique.
 
 ## Coverage legend
 
@@ -54,7 +54,7 @@ Techniques for finding sophisticatedly hidden malicious programs on a Linux syst
 | 3.3 | World-writable file scan | **Y** | `sread world`, AGENT.md §World-writable | Excludes /tmp, /var/tmp, /dev/shm, /run, /proc, /sys |
 | 3.4 | Timestamp manipulation detection (mtime vs ctime discrepancy) | **Y** | `sread tamper` | Flags system binaries where ctime >> mtime (backdated); also flags recent ctime |
 | 3.5 | Extended attribute (xattr) payloads | **Y** | `sread xattr` | Scans system binaries and temp dirs for non-standard xattrs; flags user.* namespace on system binaries |
-| 3.6 | Bind mount file hiding | **N** | — | mount --bind can hide directories; compare /proc/mounts for overlapping mount points |
+| 3.6 | Bind mount file hiding | **Y** | `sread mounts` | Parses mountinfo for bind mounts over sensitive paths; detects overlapping mount points on same device |
 | 3.7 | Dotfile/unicode filename tricks | **N** | — | ". " (dot-space), ".." in non-root dirs, Cyrillic/lookalike characters |
 | 3.8 | /dev/shm staging area | **Y** | `sread world` | Dedicated scan for executables, ELF binaries, scripts, and hidden files in /dev/shm |
 | 3.9 | File ACL analysis | **P** | `sread perms` | perms.sh runs getfacl but doesn't flag anomalous ACLs |
