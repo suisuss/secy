@@ -88,14 +88,11 @@ load_schedule() {
             continue
         fi
 
-        # Validate module exists
-        if ! command -v sread &>/dev/null || ! sread "$module" --help &>/dev/null 2>&1; then
-            # Fall back to checking if module file exists
-            local mod_file="${SREAD_ROOT}/lib/modules/${module}.sh"
-            if [[ ! -f "$mod_file" ]]; then
-                secy_log "patrol" "WARNING: Unknown module '${module}' in schedule — skipping"
-                continue
-            fi
+        # Validate module exists (check file directly — sread has no per-module --help)
+        local mod_file="${SREAD_ROOT}/lib/modules/${module}.sh"
+        if [[ ! -f "$mod_file" ]]; then
+            secy_log "patrol" "WARNING: Unknown module '${module}' in schedule — skipping"
+            continue
         fi
 
         SCHED_MODULES+=("$module")

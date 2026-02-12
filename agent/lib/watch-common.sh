@@ -36,12 +36,13 @@ is_file_seen() {
 get_seen_hash() {
     local filepath="$1"
     # Return the stored hash for a filepath (ignoring size)
-    grep -F "	${filepath}	" "$WATCH_SEEN_DB" 2>/dev/null | head -1 | cut -f1
+    # || true: grep returns 1 when no match; pipefail would propagate it
+    grep -F "	${filepath}	" "$WATCH_SEEN_DB" 2>/dev/null | head -1 | cut -f1 || true
 }
 
 get_seen_size() {
     local filepath="$1"
-    grep -F "	${filepath}	" "$WATCH_SEEN_DB" 2>/dev/null | head -1 | cut -f2
+    grep -F "	${filepath}	" "$WATCH_SEEN_DB" 2>/dev/null | head -1 | cut -f2 || true
 }
 
 mark_file_seen() {
