@@ -1,6 +1,6 @@
 # Threat Detection Index
 
-Techniques for finding sophisticatedly hidden malicious programs on a Linux system, mapped to where (if anywhere) secy addresses them. See [THREATS-DEPTH.md](THREATS-DEPTH.md) for detailed explanations, detection methods, and remediation for each technique.
+Techniques for finding sophisticatedly hidden malicious programs on a Linux system, mapped to where (if anywhere) secy addresses them.
 
 ## Coverage legend
 
@@ -39,8 +39,8 @@ Techniques for finding sophisticatedly hidden malicious programs on a Linux syst
 | 2.5 | Deleted binary detection (/proc/[pid]/exe → "(deleted)") | **Y** | `sread spyproc` | Flags processes whose exe symlink points to a deleted file |
 | 2.6 | memfd_create execution (/proc/[pid]/exe → "/memfd:*") | **Y** | `sread spyproc` | Flags memory-only execution via memfd_create |
 | 2.7 | Process name spoofing (comm vs exe vs cmdline mismatch) | **Y** | `sread spyproc` | Compares comm against basename(exe); skips interpreters; 15-char truncation aware |
-| 2.8 | Thread injection (unexpected /proc/[pid]/task/ entries) | **P** | `sread spyproc` | Compares thread comm against main process comm; allowlists known multi-threaded apps and worker patterns |
-| 2.9 | PID namespace hiding (/proc/[pid]/ns/pid differs from PID 1) | **P** | `sread spyproc` | Compares process PID namespace against PID 1; allowlists container runtimes by process and parent comm |
+| 2.8 | Thread injection (unexpected /proc/[pid]/task/ entries) | **N** | — | Threads that don't match expected behavior of the main binary |
+| 2.9 | PID namespace hiding (/proc/[pid]/ns/pid differs from PID 1) | **N** | — | Processes hiding in non-default namespaces |
 | 2.10 | Process tree / ancestry analysis | **N** | — | Detect anomalous parent→child chains (nginx→bash, cron→curl\|sh); data in /proc/[pid]/status PPid field |
 | 2.11 | Process memory content scanning (/proc/[pid]/mem) | **N** | — | Scan process memory for injected code, IoC strings, shellcode; detects hollowing and reflective injection |
 | 2.12 | Loaded library verification (/proc/[pid]/maps) | **N** | — | Hash .so files mapped into processes against known-good; detects library injection without LD_PRELOAD |
@@ -53,8 +53,8 @@ Techniques for finding sophisticatedly hidden malicious programs on a Linux syst
 | 3.2 | SGID binary scan | **Y** | `sread setuid` | Finds -perm -2000 |
 | 3.3 | World-writable file scan | **Y** | `sread world`, AGENT.md §World-writable | Excludes /tmp, /var/tmp, /dev/shm, /run, /proc, /sys |
 | 3.4 | Timestamp manipulation detection (mtime vs ctime discrepancy) | **Y** | `sread tamper` | Flags system binaries where ctime >> mtime (backdated); also flags recent ctime |
-| 3.5 | Extended attribute (xattr) payloads | **Y** | `sread xattr` | Scans system binaries and temp dirs for non-standard xattrs; flags user.* namespace on system binaries |
-| 3.6 | Bind mount file hiding | **Y** | `sread mounts` | Parses mountinfo for bind mounts over sensitive paths; detects overlapping mount points on same device |
+| 3.5 | Extended attribute (xattr) payloads | **N** | — | Malware can store config/payloads in xattrs (getfattr -d -m '') |
+| 3.6 | Bind mount file hiding | **N** | — | mount --bind can hide directories; compare /proc/mounts for overlapping mount points |
 | 3.7 | Dotfile/unicode filename tricks | **N** | — | ". " (dot-space), ".." in non-root dirs, Cyrillic/lookalike characters |
 | 3.8 | /dev/shm staging area | **Y** | `sread world` | Dedicated scan for executables, ELF binaries, scripts, and hidden files in /dev/shm |
 | 3.9 | File ACL analysis | **P** | `sread perms` | perms.sh runs getfacl but doesn't flag anomalous ACLs |
@@ -70,9 +70,9 @@ Techniques for finding sophisticatedly hidden malicious programs on a Linux syst
 | 4.2 | Out-of-tree / unsigned module detection | **Y** | `sread kmod` | Checks /sys/module/[name]/taint for O (out-of-tree) and E (unsigned) flags |
 | 4.3 | Input subsystem module enumeration | **Y** | `sread kmod` | Lists uinput, evdev, hid, keyboard modules |
 | 4.4 | /proc/modules vs /sys/module/ cross-verification | **Y** | `sread kmod` | Checks both directions; filters built-in modules via refcnt |
-| 4.5 | Syscall table integrity (kprobes list) | **P** | `sread kmod` | Enumerates active kprobes and kprobe events; flags hooks on sensitive functions; requires debugfs mount |
+| 4.5 | Syscall table integrity (kprobes list) | **N** | — | /sys/kernel/debug/kprobes/list shows unexpected function hooks |
 | 4.6 | eBPF program enumeration | **P** | `sread ebpf` | Pinned BPF objects, bpftool prog list, active tracepoints, BPF sysctl; needs bpftool/debugfs for full coverage |
-| 4.7 | DKMS third-party module persistence | **Y** | `sread kmod` | Enumerates /var/lib/dkms/; allowlists known-legitimate drivers; flags unknown modules |
+| 4.7 | DKMS third-party module persistence | **N** | — | /var/lib/dkms/ — modules that auto-rebuild on kernel updates |
 | 4.8 | Kernel taint bitmask decoding | **Y** | `sread kmod` | Per-module taint flags + system-wide /proc/sys/kernel/tainted with full bitmask decode |
 
 ## 5. Network-level indicators
@@ -85,7 +85,7 @@ Techniques for finding sophisticatedly hidden malicious programs on a Linux syst
 | 5.4 | UDP socket enumeration | **Y** | AGENT.md §Network | Agent reads /proc/net/udp and udp6 |
 | 5.5 | Raw socket detection (/proc/net/raw) | **Y** | `sread spyproc --deep` | Almost nothing legitimate uses raw sockets besides ping |
 | 5.6 | Packet socket detection (/proc/net/packet) | **Y** | `sread spyproc --deep` | Detects sniffers |
-| 5.7 | DNS exfiltration / tunneling detection | **P** | `sread dnstun` | Detects tunneling tool processes/binaries, rogue UDP/53 listeners, suspicious resolv.conf; needs packet capture for full detection |
+| 5.7 | DNS exfiltration / tunneling detection | **N** | — | Requires DNS query capture; long subdomain labels or high query volume to single domain |
 | 5.8 | Conntrack / NAT translation analysis | **N** | — | /proc/net/nf_conntrack reveals hidden destinations behind NAT |
 | 5.9 | Socket inode → PID correlation | **Y** | `sread netconn` | _find_proc_by_inode helper; also recommended as host-side ss -tnp |
 | 5.10 | C2 / malicious IP reputation matching | **N** | — | Cross-reference established connections against known-bad IP databases (Feodo Tracker, abuse.ch); bakeable at build time like hash DB |
@@ -94,9 +94,9 @@ Techniques for finding sophisticatedly hidden malicious programs on a Linux syst
 
 | # | Technique | Covered | Where | Notes |
 |---|-----------|---------|-------|-------|
-| 6.1 | EFI variable inspection (/sys/firmware/efi/efivars/) | **P** | `sread firmware` | Enumerates boot entries, flags large efivars (>4KB); limited to what sysfs exposes |
-| 6.2 | UEFI Secure Boot state verification | **P** | `sread firmware` | Reads SecureBoot efivar and mokutil; flags if disabled; cannot verify boot chain integrity |
-| 6.3 | BMC/IPMI presence detection | **P** | `sread firmware` | Checks /dev/ipmi0, IPMI modules, ipmitool, network interfaces; cannot audit BMC firmware |
+| 6.1 | EFI variable inspection (/sys/firmware/efi/efivars/) | **N** | — | EFI bootkits survive OS reinstall |
+| 6.2 | UEFI Secure Boot state verification | **N** | — | mokutil --sb-state; unexpected disable is suspicious |
+| 6.3 | BMC/IPMI presence detection | **N** | — | Independent computer with network access; persists across OS reinstall |
 
 ## 7. Meta-techniques
 
@@ -135,7 +135,11 @@ Require capabilities beyond file reading, or have limited applicability:
 
 | # | Threat | Why hard |
 |---|--------|----------|
+| 4.5 | Syscall table integrity | Requires debugfs access (/sys/kernel/debug), usually root + mount |
+| 4.6 | eBPF enumeration | Requires bpftool or /sys/fs/bpf (may not be mounted in container) |
+| 5.7 | DNS tunneling | Requires packet capture or DNS query logs |
 | 5.8 | Conntrack analysis | Requires /proc/net/nf_conntrack (host netns + conntrack loaded) |
+| 6.1–6.3 | Firmware/hardware | Requires EFI vars and IPMI access; out of scope |
 | 7.6 | Offline analysis | Fundamentally cannot be done from a running system |
 | 7.9 | Dynamic analysis / sandboxing | Requires execution environment; fundamentally incompatible with read-only container model |
 | 8.1 | Real-time event hooks | Requires host-side kernel access (eBPF, auditd, fanotify); Docker container can only poll |
@@ -163,14 +167,8 @@ Could be added within the current architecture (read-only container, build-time 
 
 | # | Current state | Improvement |
 |---|---------------|-------------|
-| 2.8 | Thread comm mismatch heuristic | Deeper thread analysis (stack traces, memory regions) |
-| 2.9 | PID namespace comparison with container allowlist | Track namespace creation events, correlate with network activity |
 | 3.9 | perms.sh runs getfacl | Flag ACLs that grant unexpected users access to sensitive files |
 | 3.10 | perms.sh runs lsattr | Flag immutable/append-only bits on non-standard files |
-| 4.5 | Kprobe enumeration from debugfs | Requires debugfs mount; syscall table address comparison needs /proc/kallsyms |
-| 4.6 | Pinned BPF + bpftool + tracepoints + sysctl | Requires bpftool for full program listing; container may lack bpffs |
-| 5.7 | Tool/binary/listener/resolv.conf detection | Needs packet capture (tcpdump/tshark) to detect actual DNS tunneling traffic |
-| 6.1–6.3 | EFI vars, Secure Boot, BMC/IPMI presence | Cannot verify boot chain integrity or audit BMC firmware from userspace |
 | 7.2 | kmod cross-check implemented; netconn uses host netns | Further cross-source techniques (e.g., /proc/net/tcp vs ss output) |
 | 7.3 | Name-based + behavioral + exe-based | fd analysis for all processes, not just known names |
 | 8.5 | Ad-hoc hardening checks in AGENT.md | Map checks to CIS benchmark IDs; produce a hardening score; add STIG/PCI profiles |
