@@ -90,3 +90,39 @@ services:
     security_opt:
       - no-new-privileges:true
       - seccomp=unconfined
+
+  # Long-lived daemon that runs scheduled security scans and AI review
+  secy-patrol:
+    build: .
+    image: secy
+
+    command: ["patrol"]
+    restart: unless-stopped
+
+    environment:
+      - SREAD_ROOT=/usr/local/lib/sread
+      - SECY_STATE_DIR=/var/lib/secy/state
+      # Uncomment for API key auth (pay-per-use) instead of OAuth
+      # - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+
+    volumes:
+      - ./state:/var/lib/secy/state
+      - /:/host:ro
+      - ${HOME}/.claude/.credentials.json:/mnt/claude-credentials.json:ro
+
+    read_only: true
+
+    cap_drop:
+      - ALL
+    cap_add:
+      - DAC_READ_SEARCH
+      - SYS_ADMIN
+      - NET_ADMIN
+
+    tmpfs:
+      - /tmp:size=64m
+      - /root:size=64m
+
+    security_opt:
+      - no-new-privileges:true
+      - seccomp=unconfined
