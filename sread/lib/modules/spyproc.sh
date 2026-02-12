@@ -80,6 +80,49 @@ run() {
     [[ $((deleted + memfd)) -eq 0 ]] && echo "  (none detected)"
     echo ""
 
+    # ── Process name spoofing ─────────────────────────────────────────
+    # Malware often disguises itself by setting comm (via prctl) or
+    # argv[0] to mimic a legitimate process while the actual binary
+    # on disk is something else. Compare /proc/[pid]/comm against
+    # basename of /proc/[pid]/exe — mismatches are suspicious.
+    #
+    # Interpreters (bash, python, etc.) legitimately differ because
+    # comm gets set to the script name, so we skip those.
+    echo "--- Process name spoofing (comm vs exe mismatch) ---"
+    local spoofed=0
+    local interpreters="^(bash|sh|dash|zsh|fish|python[0-9.]*|perl[0-9.]*|ruby[0-9.]*|node|java|php[0-9.-]*|Rscript|lua[0-9.]*)$"
+    for pid_dir in "${proc}"/[0-9]*; do
+        [[ -s "${pid_dir}/cmdline" ]] || continue
+        local exe
+        exe="$(readlink "${pid_dir}/exe" 2>/dev/null)" || continue
+        # Already flagged by deleted-binary check
+        [[ "$exe" == *" (deleted)" ]] && continue
+        [[ "$exe" == /memfd:* ]] && continue
+
+        local exe_base
+        exe_base="$(basename "$exe")"
+
+        # Skip interpreters — their comm is the script name, not the interpreter
+        [[ "$exe_base" =~ $interpreters ]] && continue
+
+        local comm
+        comm="$(cat "${pid_dir}/comm" 2>/dev/null)" || continue
+
+        # comm is truncated to 15 chars by the kernel; compare accordingly
+        local exe_base_trunc="${exe_base:0:15}"
+        if [[ "$comm" != "$exe_base_trunc" ]]; then
+            local pid
+            pid="$(basename "$pid_dir")"
+            local cmdline
+            cmdline="$(tr '\0' ' ' < "${pid_dir}/cmdline" 2>/dev/null || echo "?")"
+            echo "  [!] PID ${pid}: comm=${comm} but exe=${exe}"
+            echo "      cmdline: ${cmdline}"
+            spoofed=$((spoofed + 1))
+        fi
+    done
+    [[ $spoofed -eq 0 ]] && echo "  (none detected)"
+    echo ""
+
     # ── Ptrace attachments ───────────────────────────────────────────
     echo "--- Ptrace attachments (TracerPid != 0) ---"
     local traced=0
@@ -167,5 +210,5 @@ run() {
     fi
 
     echo ""
-    log_ok "Process scan complete (found: ${found} suspicious, ${deleted} deleted-exe, ${memfd} memfd, ${traced} traced, ${input_readers} input readers)"
+    log_ok "Process scan complete (found: ${found} suspicious, ${deleted} deleted-exe, ${memfd} memfd, ${spoofed} spoofed, ${traced} traced, ${input_readers} input readers)"
 }

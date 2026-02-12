@@ -38,7 +38,7 @@ Techniques for finding sophisticatedly hidden malicious programs on a Linux syst
 | 2.4 | Raw/packet socket detection | **Y** | `sread spyproc --deep` | Correlates fd inodes against /proc/net/raw and /proc/net/packet |
 | 2.5 | Deleted binary detection (/proc/[pid]/exe → "(deleted)") | **Y** | `sread spyproc` | Flags processes whose exe symlink points to a deleted file |
 | 2.6 | memfd_create execution (/proc/[pid]/exe → "/memfd:*") | **Y** | `sread spyproc` | Flags memory-only execution via memfd_create |
-| 2.7 | Process name spoofing (comm vs exe vs cmdline mismatch) | **N** | — | Compare /proc/[pid]/comm, /proc/[pid]/exe, /proc/[pid]/cmdline for consistency |
+| 2.7 | Process name spoofing (comm vs exe vs cmdline mismatch) | **Y** | `sread spyproc` | Compares comm against basename(exe); skips interpreters; 15-char truncation aware |
 | 2.8 | Thread injection (unexpected /proc/[pid]/task/ entries) | **N** | — | Threads that don't match expected behavior of the main binary |
 | 2.9 | PID namespace hiding (/proc/[pid]/ns/pid differs from PID 1) | **N** | — | Processes hiding in non-default namespaces |
 
@@ -113,7 +113,6 @@ These are feasible to implement within secy's file-reading architecture and woul
 
 | # | Threat | Difficulty | Impact |
 |---|--------|------------|--------|
-| 2.7 | Process name spoofing | Low | High — compare comm, exe, cmdline for each PID |
 | 4.4 | /proc/modules vs /sys/module/ cross-check | Low | High — discrepancy reveals rootkit hiding from one source |
 | 7.5 | Package integrity verification | Medium | High — read /var/lib/dpkg/info/*.md5sums and compare against file hashes |
 | 4.8 | System-wide kernel taint bitmask | Low | Medium — single file read of /proc/sys/kernel/tainted |
@@ -141,5 +140,5 @@ Require capabilities beyond file reading, or have limited applicability:
 | 3.9 | perms.sh runs getfacl | Flag ACLs that grant unexpected users access to sensitive files |
 | 3.10 | perms.sh runs lsattr | Flag immutable/append-only bits on non-standard files |
 | 4.8 | Per-module taint checked | Also decode /proc/sys/kernel/tainted system-wide bitmask |
-| 7.2 | Some cross-source awareness | Systematize: /proc/modules vs /sys/module/, comm vs exe vs cmdline |
-| 7.3 | Name-based + some behavioral | Add exe-based classification, fd analysis for all processes not just known names |
+| 7.2 | Some cross-source awareness | Systematize: /proc/modules vs /sys/module/ |
+| 7.3 | Name-based + behavioral + exe-based | fd analysis for all processes, not just known names |
