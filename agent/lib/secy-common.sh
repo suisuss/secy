@@ -64,10 +64,10 @@ invoke_claude() {
     local prompt="$2"
     local budget="$3"
 
-    local claude_cmd="claude"
+    local claude_cmd=(claude)
     if command -v srt &>/dev/null; then
         if srt -- echo srt-ok >/dev/null 2>&1; then
-            claude_cmd="srt claude"
+            claude_cmd=(srt claude)
             secy_log "" "Using srt sandbox"
         else
             secy_log "" "srt available but sandbox failed (Docker is the sandbox boundary)"
@@ -80,7 +80,7 @@ invoke_claude() {
     local raw_json
     raw_json="$(mktemp)"
 
-    $claude_cmd \
+    "${claude_cmd[@]}" \
         --dangerously-skip-permissions \
         --print \
         --verbose \
@@ -117,6 +117,6 @@ interruptible_sleep() {
     local i=0
     while [[ "$SECY_DAEMON_RUNNING" == "true" ]] && [[ $i -lt $seconds ]]; do
         sleep 1
-        (( i++ ))
+        (( i++ )) || true
     done
 }
