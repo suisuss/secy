@@ -53,7 +53,7 @@ Techniques for finding sophisticatedly hidden malicious programs on a Linux syst
 | 3.5 | Extended attribute (xattr) payloads | **N** | — | Malware can store config/payloads in xattrs (getfattr -d -m '') |
 | 3.6 | Bind mount file hiding | **N** | — | mount --bind can hide directories; compare /proc/mounts for overlapping mount points |
 | 3.7 | Dotfile/unicode filename tricks | **N** | — | ". " (dot-space), ".." in non-root dirs, Cyrillic/lookalike characters |
-| 3.8 | /dev/shm staging area | **P** | `sread world` excludes /dev/shm | world.sh explicitly *excludes* /dev/shm; should scan it separately since malware stages payloads there |
+| 3.8 | /dev/shm staging area | **Y** | `sread world` | Dedicated scan for executables, ELF binaries, scripts, and hidden files in /dev/shm |
 | 3.9 | File ACL analysis | **P** | `sread perms` | perms.sh runs getfacl but doesn't flag anomalous ACLs |
 | 3.10 | Extended file attributes (lsattr/chattr) | **P** | `sread perms` | perms.sh runs lsattr but doesn't flag suspicious attributes (e.g., immutable bit on unusual files) |
 
@@ -113,8 +113,6 @@ These are feasible to implement within secy's file-reading architecture and woul
 
 | # | Threat | Difficulty | Impact |
 |---|--------|------------|--------|
-| 3.8 | /dev/shm scan (not exclude) | Low | Medium — dedicated scan of /dev/shm for executables and payloads |
-
 ### Not covered (specialized)
 
 Require capabilities beyond file reading, or have limited applicability:
@@ -132,7 +130,6 @@ Require capabilities beyond file reading, or have limited applicability:
 
 | # | Current state | Improvement |
 |---|---------------|-------------|
-| 3.8 | world.sh excludes /dev/shm | Add dedicated /dev/shm scan for executables, scripts, ELF binaries |
 | 3.9 | perms.sh runs getfacl | Flag ACLs that grant unexpected users access to sensitive files |
 | 3.10 | perms.sh runs lsattr | Flag immutable/append-only bits on non-standard files |
 | 7.2 | kmod cross-check implemented; netconn uses host netns | Further cross-source techniques (e.g., /proc/net/tcp vs ss output) |
