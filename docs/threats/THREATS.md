@@ -139,6 +139,15 @@ Not detection techniques, but infrastructure that determines whether detections 
 | 9.2 | Credentials in process command line | **N** | — | /proc/[pid]/cmdline with passwords as CLI arguments |
 | 9.3 | Swap/core dump credential leakage | **N** | — | suid_dumpable sysctl, core dump storage, swap containing cleartext |
 
+## 10. Privilege escalation misconfigurations
+
+| # | Technique | Covered | Where | Notes |
+|---|-----------|---------|-------|-------|
+| 10.1 | Sudo NOPASSWD with GTFOBins | **N** | — | NOPASSWD entries for vim, find, python, etc. that trivially give root shells |
+| 10.2 | Sudo env_keep preserving injection vars | **N** | — | LD_PRELOAD, PYTHONPATH, LD_LIBRARY_PATH kept through sudo |
+| 10.3 | File capabilities on binaries | **N** | — | getcap showing cap_setuid, cap_net_raw, etc. on unexpected binaries |
+| 10.4 | Polkit rule manipulation | **N** | — | /etc/polkit-1/rules.d/ granting unauthorized privilege escalation |
+
 ---
 
 ## Gap summary
@@ -175,6 +184,10 @@ Could be added within the current architecture (read-only container, build-time 
 | 9.1 | Credentials in process environment | Scan /proc/[pid]/environ for common credential patterns (API_KEY=, PASSWORD=, TOKEN=, AWS_SECRET) |
 | 9.2 | Credentials in process command line | Scan /proc/[pid]/cmdline for password-like arguments; flag -p, --password, --token with values |
 | 9.3 | Swap/core dump credential leakage | Check suid_dumpable sysctl, core_pattern config, swap partition encryption status |
+| 10.1 | Sudo NOPASSWD with GTFOBins | Parse /etc/sudoers and /etc/sudoers.d/*; match NOPASSWD commands against GTFOBins list |
+| 10.2 | Sudo env_keep preserving injection vars | Parse sudoers for env_keep containing LD_PRELOAD, PYTHONPATH, LD_LIBRARY_PATH, PERL5LIB |
+| 10.3 | File capabilities on binaries | Run getcap -r on /usr/bin, /usr/sbin, /usr/local/bin; flag cap_setuid, cap_dac_override on non-standard binaries |
+| 10.4 | Polkit rule manipulation | Enumerate /etc/polkit-1/rules.d/ and /usr/share/polkit-1/rules.d/; flag rules not from packages |
 | 2.10 | Process tree analysis | Read PPid from /proc/[pid]/status; reconstruct parent→child chains; flag anomalous spawning patterns |
 | 2.11 | Process memory scanning | Read /proc/[pid]/mem (requires CAP_SYS_PTRACE); scan for IoC strings, shellcode patterns |
 | 2.12 | Loaded library verification | Parse /proc/[pid]/maps; hash mapped .so files; compare against package md5sums |

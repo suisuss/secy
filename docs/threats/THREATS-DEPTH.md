@@ -2633,3 +2633,151 @@ rm -f /var/lib/systemd/coredump/core.*
 # Encrypt swap (if not already)
 # Use LUKS-encrypted swap or zram (compressed in-memory swap)
 ```
+
+---
+
+## 10. Privilege escalation misconfigurations
+
+### 10.1 Sudo NOPASSWD with GTFOBins
+
+**Threat**: Sudo rules with `NOPASSWD` allow command execution as root without authentication. When the allowed command is a GTFOBins candidate (vim, find, python, less, awk, etc.), the user can trivially escape to a root shell. This is one of the most common privilege escalation paths in CTFs and real-world compromises.
+
+**Where to look**:
+- `/etc/sudoers` — main sudoers file
+- `/etc/sudoers.d/*` — drop-in sudoers files
+- `sudo -l` — effective rules for the current user
+
+**What to look for**:
+- `NOPASSWD` entries for interactive programs: `vim`, `vi`, `nano`, `less`, `more`, `man`
+- `NOPASSWD` entries for interpreters: `python`, `python3`, `perl`, `ruby`, `node`, `lua`
+- `NOPASSWD` entries for file utilities with exec: `find` (with -exec), `awk`, `nmap` (interactive mode)
+- `NOPASSWD` entries for package managers: `apt`, `pip`, `gem` (can run arbitrary code during install)
+- `NOPASSWD: ALL` — unrestricted root access without password
+- Wildcards in command paths: `/usr/bin/*` or `(ALL) NOPASSWD: /bin/bash *`
+
+**Remediation**:
+```bash
+# Audit NOPASSWD entries
+grep -r NOPASSWD /etc/sudoers /etc/sudoers.d/
+
+# Remove or restrict dangerous entries
+sudo visudo
+# Replace: user ALL=(ALL) NOPASSWD: /usr/bin/vim
+# With specific, non-escapable commands only
+
+# If the program is needed, restrict arguments:
+# user ALL=(ALL) NOPASSWD: /usr/bin/systemctl restart myservice
+# (specific service, not arbitrary systemctl)
+
+# Cross-reference against GTFOBins:
+# https://gtfobins.github.io/#+sudo
+```
+
+---
+
+### 10.2 Sudo env_keep preserving injection vars
+
+**Threat**: The `env_keep` directive in sudoers preserves specified environment variables across sudo invocation. If variables like `LD_PRELOAD`, `PYTHONPATH`, or `LD_LIBRARY_PATH` are kept, a user can inject a malicious shared library or Python module that executes with root privileges when the sudo command runs.
+
+**Where to look**:
+- `/etc/sudoers` — `Defaults env_keep` lines
+- `/etc/sudoers.d/*` — drop-in overrides
+- `sudo -V` — shows compiled-in defaults including env_keep
+
+**What to look for**:
+- `env_keep` containing `LD_PRELOAD` — load arbitrary shared library as root
+- `env_keep` containing `LD_LIBRARY_PATH` — redirect library loading to attacker-controlled directory
+- `env_keep` containing `PYTHONPATH` — inject Python modules executed by root Python processes
+- `env_keep` containing `PERL5LIB`, `RUBYLIB`, `NODE_PATH` — same pattern for other interpreters
+- `env_keep` containing `PATH` — redirect command resolution (though sudo usually resets PATH via secure_path)
+
+**Remediation**:
+```bash
+# Check env_keep settings
+sudo grep -r env_keep /etc/sudoers /etc/sudoers.d/
+
+# Check effective env settings
+sudo sudo -V 2>/dev/null | grep -A 20 'Environment variables to preserve'
+
+# Remove dangerous variables from env_keep
+sudo visudo
+# Remove LD_PRELOAD, LD_LIBRARY_PATH, PYTHONPATH from env_keep
+
+# Ensure env_reset is enabled (default)
+# Defaults    env_reset
+```
+
+---
+
+### 10.3 File capabilities on binaries
+
+**Threat**: Linux file capabilities grant specific privileges to binaries without requiring full SUID-root. A binary with `cap_setuid` can change its UID to root. `cap_dac_override` bypasses all file permission checks. `cap_net_raw` enables packet sniffing. Unlike SUID, capabilities are less visible and often missed in audits.
+
+**Where to look**:
+- `getcap -r /usr/bin /usr/sbin /usr/local/bin /opt 2>/dev/null` — scan for binaries with capabilities
+- `/usr/bin/`, `/usr/sbin/`, `/usr/local/bin/` — standard binary directories
+- Any custom application directories
+
+**What to look for**:
+- `cap_setuid` on interpreters or general-purpose tools — instant root via UID change
+- `cap_dac_override` — bypass all file permission checks (read /etc/shadow, write /etc/passwd)
+- `cap_dac_read_search` — read any file on the system
+- `cap_sys_admin` — broad privilege (mount, BPF, many kernel interfaces)
+- `cap_net_raw` on unexpected binaries (only ping should normally have this)
+- `cap_sys_ptrace` — attach to and modify any process
+- Capabilities on binaries not installed by the package manager
+
+**Remediation**:
+```bash
+# List all binaries with capabilities
+getcap -r / 2>/dev/null
+
+# Verify capabilities match expected packages
+# Typical legitimate capabilities:
+# /usr/bin/ping = cap_net_raw+ep
+# /usr/bin/mtr-packet = cap_net_raw+ep
+
+# Remove unexpected capabilities
+sudo setcap -r /path/to/suspicious/binary
+
+# Verify package integrity for binaries with capabilities
+dpkg -S /path/to/binary
+debsums <package>
+```
+
+---
+
+### 10.4 Polkit rule manipulation
+
+**Threat**: Polkit (PolicyKit) mediates privilege escalation for desktop and system actions. Rules in `/etc/polkit-1/rules.d/` are JavaScript files that can grant any user passwordless access to privileged operations (mounting disks, managing services, installing packages). A malicious rule file provides persistent, nearly invisible privilege escalation.
+
+**Where to look**:
+- `/etc/polkit-1/rules.d/*.rules` — local rules (highest priority)
+- `/usr/share/polkit-1/rules.d/*.rules` — vendor rules
+- `/etc/polkit-1/localauthority/` — legacy .pkla files (older systems)
+
+**What to look for**:
+- Rules that return `polkit.Result.YES` for all subjects or broad groups
+- Rules granting `org.freedesktop.systemd1.manage-units` — start/stop any service
+- Rules granting `org.freedesktop.policykit.exec` — execute programs as another user
+- Rules granting `org.freedesktop.packagekit.system-update` — install arbitrary packages
+- Rule files not owned by a package: `dpkg -S /etc/polkit-1/rules.d/*`
+- Recently modified rules: `ls -lt /etc/polkit-1/rules.d/`
+
+**Remediation**:
+```bash
+# List all local polkit rules
+ls -la /etc/polkit-1/rules.d/
+
+# Check for overly permissive rules
+grep -r 'Result.YES' /etc/polkit-1/rules.d/
+
+# Verify rules are from packages
+for f in /etc/polkit-1/rules.d/*; do
+    dpkg -S "$f" 2>/dev/null || echo "UNPACKAGED: $f"
+done
+
+# Remove malicious rules
+sudo rm /etc/polkit-1/rules.d/malicious.rules
+sudo systemctl restart polkit
+```
