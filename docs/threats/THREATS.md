@@ -94,6 +94,7 @@ Techniques for finding sophisticatedly hidden malicious programs on a Linux syst
 | 5.8 | Conntrack / NAT translation analysis | **N** | — | /proc/net/nf_conntrack reveals hidden destinations behind NAT |
 | 5.9 | Socket inode → PID correlation | **Y** | `sread netconn` | _find_proc_by_inode helper; also recommended as host-side ss -tnp |
 | 5.10 | C2 / malicious IP reputation matching | **N** | — | Cross-reference established connections against known-bad IP databases (Feodo Tracker, abuse.ch); bakeable at build time like hash DB |
+| 5.11 | Container/Docker escape vectors | **N** | — | Docker socket permissions, privileged containers, docker group membership, cgroup escape |
 
 ## 6. Firmware / hardware
 
@@ -162,6 +163,7 @@ Could be added within the current architecture (read-only container, build-time 
 | 1.14 | Git hook persistence | Scan .git/hooks/ in known repos; check global core.hooksPath and url.*.insteadOf in gitconfig |
 | 1.15 | D-Bus service hijacking | Enumerate ~/.local/share/dbus-1/services/; compare Name= against system services for shadowing |
 | 3.13 | Credential file permission exposure | Scan for .env, *.key, *.pem, credentials.json with world/group-readable permissions; flag sensitive files outside expected permission masks |
+| 5.11 | Container/Docker escape vectors | Check /var/run/docker.sock permissions, docker group membership, privileged container flags, cgroup escape conditions |
 | 2.10 | Process tree analysis | Read PPid from /proc/[pid]/status; reconstruct parent→child chains; flag anomalous spawning patterns |
 | 2.11 | Process memory scanning | Read /proc/[pid]/mem (requires CAP_SYS_PTRACE); scan for IoC strings, shellcode patterns |
 | 2.12 | Loaded library verification | Parse /proc/[pid]/maps; hash mapped .so files; compare against package md5sums |

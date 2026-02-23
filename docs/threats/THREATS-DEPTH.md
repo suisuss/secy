@@ -1969,6 +1969,48 @@ echo "<c2_ip>" >> /etc/nftables-blocklist.conf
 
 ---
 
+### 5.11 Container/Docker escape vectors
+
+**Threat**: A container with access to the Docker socket, running in privileged mode, or with a user in the docker group has an equivalent-to-root escape path to the host. The docker group grants unrestricted daemon access (mount host filesystem, run privileged containers). Cgroup escape techniques allow breaking out of the container namespace entirely.
+
+**Where to look**:
+- `/var/run/docker.sock` — Docker socket permissions
+- `/etc/group` — docker group membership
+- `/proc/1/cgroup` — detect if running inside a container
+- `docker inspect` output — privileged flag, capabilities, mounts
+- `/proc/self/status` — `CapEff` bitmask showing granted capabilities
+
+**What to look for**:
+- Docker socket (`/var/run/docker.sock`) readable/writable by non-root users or groups
+- Users in the docker group who shouldn't have unrestricted host access
+- Containers running with `--privileged` flag (all capabilities + device access)
+- Containers with sensitive host mounts: `/`, `/etc/`, `/var/run/docker.sock`
+- Containers with `SYS_ADMIN`, `SYS_PTRACE`, or `DAC_READ_SEARCH` capabilities
+- Writable cgroup paths from within containers (`/sys/fs/cgroup/*/release_agent`)
+
+**Remediation**:
+```bash
+# Check docker socket permissions
+ls -la /var/run/docker.sock
+
+# List docker group members
+grep docker /etc/group
+
+# Remove unnecessary users from docker group
+sudo gpasswd -d <user> docker
+
+# List privileged containers
+docker ps -q | xargs docker inspect --format '{{.Name}} privileged={{.HostConfig.Privileged}}'
+
+# List containers with sensitive mounts
+docker ps -q | xargs docker inspect --format '{{.Name}} {{range .Mounts}}{{.Source}}:{{.Destination}} {{end}}'
+
+# Use rootless Docker or Podman instead
+# https://docs.docker.com/engine/security/rootless/
+```
+
+---
+
 ## 6. Firmware / hardware
 
 ### 6.1 EFI variable inspection
