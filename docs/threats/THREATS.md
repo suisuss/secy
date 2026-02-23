@@ -131,6 +131,14 @@ Not detection techniques, but infrastructure that determines whether detections 
 | 8.5 | Compliance benchmarking (CIS/STIG scoring) | **P** | AGENT.md | Ad-hoc hardening checks exist (SSH, kernel params, firewall) but no formal benchmark scoring, hardening index, or profile mapping |
 | 8.6 | Multi-host / centralized management | **N** | — | Fleet-wide visibility, cross-host correlation, central console; Wazuh/OSSEC manager-agent model |
 
+## 9. Credential and secret exposure
+
+| # | Technique | Covered | Where | Notes |
+|---|-----------|---------|-------|-------|
+| 9.1 | Credentials in process environment | **N** | — | /proc/[pid]/environ containing API keys, DB passwords, cloud tokens |
+| 9.2 | Credentials in process command line | **N** | — | /proc/[pid]/cmdline with passwords as CLI arguments |
+| 9.3 | Swap/core dump credential leakage | **N** | — | suid_dumpable sysctl, core dump storage, swap containing cleartext |
+
 ---
 
 ## Gap summary
@@ -164,6 +172,9 @@ Could be added within the current architecture (read-only container, build-time 
 | 1.15 | D-Bus service hijacking | Enumerate ~/.local/share/dbus-1/services/; compare Name= against system services for shadowing |
 | 3.13 | Credential file permission exposure | Scan for .env, *.key, *.pem, credentials.json with world/group-readable permissions; flag sensitive files outside expected permission masks |
 | 5.11 | Container/Docker escape vectors | Check /var/run/docker.sock permissions, docker group membership, privileged container flags, cgroup escape conditions |
+| 9.1 | Credentials in process environment | Scan /proc/[pid]/environ for common credential patterns (API_KEY=, PASSWORD=, TOKEN=, AWS_SECRET) |
+| 9.2 | Credentials in process command line | Scan /proc/[pid]/cmdline for password-like arguments; flag -p, --password, --token with values |
+| 9.3 | Swap/core dump credential leakage | Check suid_dumpable sysctl, core_pattern config, swap partition encryption status |
 | 2.10 | Process tree analysis | Read PPid from /proc/[pid]/status; reconstruct parent→child chains; flag anomalous spawning patterns |
 | 2.11 | Process memory scanning | Read /proc/[pid]/mem (requires CAP_SYS_PTRACE); scan for IoC strings, shellcode patterns |
 | 2.12 | Loaded library verification | Parse /proc/[pid]/maps; hash mapped .so files; compare against package md5sums |
