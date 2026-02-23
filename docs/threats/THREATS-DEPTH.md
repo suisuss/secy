@@ -408,6 +408,157 @@ sudo ldconfig
 
 ---
 
+### 1.12 SSH authorized_keys persistence
+
+**Threat**: An attacker who gains write access to `~/.ssh/authorized_keys` can add their own public key for persistent passwordless SSH access. This survives password changes, service restarts, and reboots. Forced commands can be used to execute payloads on every login, and non-standard `AuthorizedKeysFile` paths in sshd_config can hide keys from casual inspection.
+
+**Where to look**:
+- `~/.ssh/authorized_keys` and `~/.ssh/authorized_keys2` — per-user authorized keys
+- `/etc/ssh/sshd_config` — `AuthorizedKeysFile` directive (may point to non-standard locations)
+- `/etc/ssh/sshd_config.d/*.conf` — drop-in overrides
+- `/root/.ssh/authorized_keys` — root account
+
+**What to look for**:
+- Keys added recently that the user doesn't recognize — compare key count against expected
+- `command="..."` forced command prefixes — execute arbitrary code on every SSH login
+- `no-pty,no-agent-forwarding` restrictions on legitimate keys being removed (widening access)
+- `AuthorizedKeysFile` pointing to non-standard paths like `/tmp/`, `/dev/shm/`, or world-writable directories
+- Keys with comments that don't match known team members or machines
+- `authorized_keys` files with unexpected permissions (should be 600)
+
+**Remediation**:
+```bash
+# List all authorized keys for all users
+for home in /home/* /root; do
+    [ -f "$home/.ssh/authorized_keys" ] && echo "=== $home ===" && cat "$home/.ssh/authorized_keys"
+done
+
+# Check for non-standard AuthorizedKeysFile
+grep -ri AuthorizedKeysFile /etc/ssh/
+
+# Remove unauthorized keys
+# Edit ~/.ssh/authorized_keys and remove unknown entries
+
+# Verify permissions
+chmod 600 ~/.ssh/authorized_keys
+chmod 700 ~/.ssh
+```
+
+---
+
+### 1.13 Systemd drop-in overrides
+
+**Threat**: Systemd drop-in files (`/etc/systemd/system/<unit>.d/override.conf`) can silently replace the `ExecStart` of any system service without modifying the original unit file. Generators in `/etc/systemd/system-generators/` or `/etc/systemd/user-generators/` dynamically create units at boot. Socket activation hijacking redirects traffic intended for one service to a malicious one.
+
+**Where to look**:
+- `/etc/systemd/system/*.d/override.conf` — system service overrides
+- `~/.config/systemd/user/*.d/override.conf` — user service overrides
+- `/etc/systemd/system-generators/` and `/etc/systemd/user-generators/` — dynamic unit generators
+- `/etc/systemd/system/*.socket` — socket activation units
+
+**What to look for**:
+- `ExecStart=` in drop-in files that differs from the original unit (especially pointing to `/tmp/`, `/dev/shm/`, or hidden dirs)
+- Drop-in files that clear `ExecStart=` (empty value) then set a new one — complete ExecStart replacement
+- Generators that are not from installed packages: `dpkg -S /etc/systemd/system-generators/*`
+- Socket units listening on the same port as a legitimate service but activating a different binary
+- Recently created drop-in directories: `find /etc/systemd/system -name '*.d' -newer /var/lib/dpkg/info -type d`
+
+**Remediation**:
+```bash
+# List all overrides
+systemd-delta --type=overridden
+
+# Check generators
+ls -la /etc/systemd/system-generators/ /etc/systemd/user-generators/ 2>/dev/null
+
+# Remove malicious override
+rm /etc/systemd/system/<service>.d/override.conf
+systemctl daemon-reload
+systemctl restart <service>
+
+# Remove malicious generator
+rm /etc/systemd/system-generators/<generator>
+systemctl daemon-reload
+```
+
+---
+
+### 1.14 Git hook persistence
+
+**Threat**: Git hooks (`.git/hooks/`) execute automatically on git operations (commit, push, checkout, merge). An attacker who modifies hooks in a frequently-used repository gets code execution whenever the developer runs git commands. Global `core.hooksPath` redirects all repos to attacker-controlled hooks. `url.*.insteadOf` can silently redirect git remotes to attacker-controlled servers.
+
+**Where to look**:
+- `.git/hooks/` in any repository — per-repo hooks
+- `~/.gitconfig` or `~/.config/git/config` — global git configuration
+- `/etc/gitconfig` — system-wide git configuration
+- `git config --global --list` — check core.hooksPath and url.*.insteadOf
+
+**What to look for**:
+- Executable hooks in `.git/hooks/` that are not symlinks to a known hook manager (husky, pre-commit, lefthook)
+- `core.hooksPath` pointing to an unexpected directory (especially outside the repo)
+- `url.<base>.insteadOf` entries that redirect known hosts to unknown servers
+- Hooks containing `curl`, `wget`, `nc`, `bash -c`, or any network exfiltration commands
+- `post-checkout` or `post-merge` hooks — execute on common operations developers don't think twice about
+
+**Remediation**:
+```bash
+# Check global hooks path
+git config --global core.hooksPath
+
+# Check URL rewriting rules
+git config --global --get-regexp 'url\..*\.insteadof'
+
+# Inspect hooks in a repository
+ls -la .git/hooks/
+cat .git/hooks/post-checkout
+
+# Remove malicious global config
+git config --global --unset core.hooksPath
+git config --global --unset-all url.<malicious>.insteadOf
+
+# Remove malicious per-repo hooks
+rm .git/hooks/<malicious-hook>
+```
+
+---
+
+### 1.15 D-Bus service hijacking
+
+**Threat**: D-Bus is the inter-process communication system used by most Linux desktops. User-writable service files in `~/.local/share/dbus-1/services/` can intercept service activation requests — when an application asks D-Bus to start a service by name, the attacker's binary runs instead. Permissive system bus policies in `/etc/dbus-1/system.d/` can allow unprivileged users to call privileged methods.
+
+**Where to look**:
+- `~/.local/share/dbus-1/services/*.service` — user session bus services
+- `/usr/share/dbus-1/services/*.service` — system-installed session bus services
+- `/etc/dbus-1/system.d/*.conf` — system bus policies
+- `/usr/share/dbus-1/system-services/*.service` — system bus services
+
+**What to look for**:
+- User session services in `~/.local/share/dbus-1/services/` that shadow system-installed services (same `Name=` but different `Exec=`)
+- Service files with `Exec=` pointing to `/tmp/`, `/dev/shm/`, or hidden directories
+- System bus policies with `<allow send_destination="..." />` for unexpected senders
+- Policies granting `<allow own="..." />` to non-root users for privileged service names
+- Recently modified service files: `find ~/.local/share/dbus-1/services/ -newer /var/lib/dpkg/info`
+
+**Remediation**:
+```bash
+# List user D-Bus services
+ls -la ~/.local/share/dbus-1/services/
+
+# Compare against system-installed services
+diff <(ls /usr/share/dbus-1/services/) <(ls ~/.local/share/dbus-1/services/ 2>/dev/null)
+
+# Remove malicious user service
+rm ~/.local/share/dbus-1/services/malicious.service
+
+# Check system bus policies for overly permissive rules
+grep -r 'allow.*send_destination' /etc/dbus-1/system.d/
+
+# Restart D-Bus (caution: affects all D-Bus services)
+sudo systemctl restart dbus
+```
+
+---
+
 ## 2. Process-level hiding
 
 ### 2.1 Known spyware process name matching

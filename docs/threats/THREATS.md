@@ -27,6 +27,10 @@ Techniques for finding sophisticatedly hidden malicious programs on a Linux syst
 | 1.9 | LD_PRELOAD per-process (environ) | **Y** | `sread preload` | Scans /proc/[pid]/environ for LD_PRELOAD= |
 | 1.10 | PAM module tampering (pam_exec, pam_script) | **Y** | `sread preload` | Greps pam.d for suspicious modules |
 | 1.11 | Suspicious shared libraries in ld cache | **Y** | `sread preload` | Searches ldconfig -p for spy/hook/inject patterns |
+| 1.12 | SSH authorized_keys persistence | **N** | — | New keys in ~/.ssh/authorized_keys, forced commands, non-standard AuthorizedKeysFile paths |
+| 1.13 | Systemd drop-in overrides | **N** | — | /etc/systemd/system/*.d/override.conf replacing ExecStart; generators; socket activation hijacking |
+| 1.14 | Git hook persistence | **N** | — | Malicious .git/hooks/, global core.hooksPath, url.*.insteadOf remote rewriting |
+| 1.15 | D-Bus service hijacking | **N** | — | User-writable ~/.local/share/dbus-1/services/ intercepting service activation; permissive system bus policies |
 
 ## 2. Process-level hiding
 
@@ -152,6 +156,10 @@ Could be added within the current architecture (read-only container, build-time 
 
 | # | Threat | Implementation path |
 |---|--------|---------------------|
+| 1.12 | SSH authorized_keys persistence | Scan ~/.ssh/authorized_keys for unknown keys, forced commands; check AuthorizedKeysFile in sshd_config for non-standard paths |
+| 1.13 | Systemd drop-in overrides | Enumerate *.d/override.conf dirs under /etc/systemd/system/; check generators; cross-ref against dpkg |
+| 1.14 | Git hook persistence | Scan .git/hooks/ in known repos; check global core.hooksPath and url.*.insteadOf in gitconfig |
+| 1.15 | D-Bus service hijacking | Enumerate ~/.local/share/dbus-1/services/; compare Name= against system services for shadowing |
 | 2.10 | Process tree analysis | Read PPid from /proc/[pid]/status; reconstruct parent→child chains; flag anomalous spawning patterns |
 | 2.11 | Process memory scanning | Read /proc/[pid]/mem (requires CAP_SYS_PTRACE); scan for IoC strings, shellcode patterns |
 | 2.12 | Loaded library verification | Parse /proc/[pid]/maps; hash mapped .so files; compare against package md5sums |
