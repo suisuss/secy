@@ -1367,6 +1367,45 @@ sha256sum -c /root/baseline.sha256 2>/dev/null | grep FAILED
 
 ---
 
+### 3.13 Credential file permission exposure
+
+**Threat**: Credential files (.env, private keys, config files with embedded passwords) that are world-readable or group-readable by unintended groups allow any local user — or any compromised process — to harvest credentials without privilege escalation. This is one of the most common misconfigurations and a frequent finding in penetration tests.
+
+**Where to look**:
+- `~/.env`, project directories containing `.env` files
+- `~/.ssh/id_*`, `~/.ssh/*.pem` — SSH private keys
+- `~/.aws/credentials`, `~/.config/gcloud/credentials.db` — cloud provider credentials
+- `/etc/shadow` (should be 640 root:shadow), `/etc/gshadow`
+- Application config files: `wp-config.php`, `settings.py`, `database.yml`, `*.secret.*`
+- `/etc/ssl/private/` — TLS private keys
+
+**What to look for**:
+- Files with permissions more open than 600 (owner-only) containing secrets
+- Private keys readable by group or others: `find / -name '*.pem' -o -name '*.key' -o -name 'id_*' | xargs stat -c '%a %U %G %n' | grep -v '^600'`
+- `.env` files with world-readable permissions
+- `/etc/shadow` with permissions other than 640
+- Credential files owned by unexpected users or groups
+- Key files without restrictive permissions that SSH/TLS would normally reject (SSH enforces 600, but leaked copies may not)
+
+**Remediation**:
+```bash
+# Find credential files with overly permissive access
+find /home /root /etc -type f \( -name '.env' -o -name '*.pem' -o -name '*.key' -o -name 'id_*' -o -name 'credentials*' \) -perm /o+r 2>/dev/null
+
+# Fix permissions on private keys
+chmod 600 ~/.ssh/id_*
+chmod 600 ~/.aws/credentials
+
+# Fix .env files
+find /home -name '.env' -exec chmod 600 {} \;
+
+# Verify /etc/shadow permissions
+chmod 640 /etc/shadow
+chown root:shadow /etc/shadow
+```
+
+---
+
 ## 4. Kernel-level (rootkits)
 
 ### 4.1 Suspicious kernel module name matching
