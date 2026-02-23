@@ -65,6 +65,7 @@ Techniques for finding sophisticatedly hidden malicious programs on a Linux syst
 | 3.10 | Extended file attributes (lsattr/chattr) | **P** | `sread perms` | perms.sh runs lsattr but doesn't flag suspicious attributes (e.g., immutable bit on unusual files) |
 | 3.11 | Known rootkit artifact paths | **N** | — | Check for files/dirs installed by known rootkits (rkhunter-style): /dev/.hid, /usr/lib/libproc.a, SHV5/Adore/knark/Diamorphine artifacts |
 | 3.12 | Full filesystem hash database (AIDE/Tripwire-style) | **N** | — | Persistent cryptographic hash DB of all critical files; detects modification of non-packaged files, configs, manually-placed scripts |
+| 3.13 | Credential file permission exposure | **N** | — | .env, key files, configs world-readable or group-readable by unintended groups |
 
 ## 4. Kernel-level (rootkits)
 
@@ -160,6 +161,7 @@ Could be added within the current architecture (read-only container, build-time 
 | 1.13 | Systemd drop-in overrides | Enumerate *.d/override.conf dirs under /etc/systemd/system/; check generators; cross-ref against dpkg |
 | 1.14 | Git hook persistence | Scan .git/hooks/ in known repos; check global core.hooksPath and url.*.insteadOf in gitconfig |
 | 1.15 | D-Bus service hijacking | Enumerate ~/.local/share/dbus-1/services/; compare Name= against system services for shadowing |
+| 3.13 | Credential file permission exposure | Scan for .env, *.key, *.pem, credentials.json with world/group-readable permissions; flag sensitive files outside expected permission masks |
 | 2.10 | Process tree analysis | Read PPid from /proc/[pid]/status; reconstruct parent→child chains; flag anomalous spawning patterns |
 | 2.11 | Process memory scanning | Read /proc/[pid]/mem (requires CAP_SYS_PTRACE); scan for IoC strings, shellcode patterns |
 | 2.12 | Loaded library verification | Parse /proc/[pid]/maps; hash mapped .so files; compare against package md5sums |
