@@ -2529,3 +2529,107 @@ oscap xccdf eval --profile cis --report report.html /path/to/benchmark.xml
 - **osquery + FleetDM model**: SQL-based queries pushed to fleet, results aggregated centrally
 - **SIEM model**: Forward logs/findings to Elasticsearch/Splunk, build dashboards and correlation rules
 - **Minimal model**: Each host pushes findings to a shared location (S3, NFS), a central script scans for cross-host patterns
+
+---
+
+## 9. Credential and secret exposure
+
+### 9.1 Credentials in process environment
+
+**Threat**: Environment variables are a common way to pass secrets to applications (12-factor app pattern). Every process's environment is readable via `/proc/[pid]/environ` by the same UID (or root). A compromised low-privilege process can harvest API keys, database passwords, and cloud tokens from other processes running as the same user.
+
+**Where to look**:
+- `/proc/[pid]/environ` — NUL-delimited environment variables for each process
+- `/proc/[pid]/status` — UID to determine which user owns the process
+
+**What to look for**:
+- Variables matching credential patterns: `*_KEY=`, `*_SECRET=`, `*_PASSWORD=`, `*_TOKEN=`, `*_CREDENTIAL=`
+- Specific high-value variables: `AWS_SECRET_ACCESS_KEY`, `DATABASE_URL` (with embedded password), `GITHUB_TOKEN`, `STRIPE_SECRET_KEY`, `OPENAI_API_KEY`
+- Variables with base64-encoded values (may be encoded credentials)
+- Long-running processes (daemons, web servers) with credentials in their environment — these are exposed for the lifetime of the process
+
+**Remediation**:
+```bash
+# Audit what credentials are exposed in process environments
+for pid in /proc/[0-9]*/environ; do
+    strings "$pid" 2>/dev/null | grep -iE 'password|secret|token|key|credential' && echo "^^^ PID: $(echo $pid | cut -d/ -f3)"
+done
+
+# Use secret management instead of environment variables:
+# - HashiCorp Vault, AWS Secrets Manager, systemd LoadCredential=
+# - Pass secrets via files with restrictive permissions (600)
+# - Use systemd's EnvironmentFile= with restricted permissions
+
+# If you must use env vars, clear them after reading:
+# In application code: os.environ.pop('SECRET_KEY') after startup
+```
+
+---
+
+### 9.2 Credentials in process command line
+
+**Threat**: Passwords and tokens passed as command-line arguments are visible to every user on the system via `ps aux` or `/proc/[pid]/cmdline`. Unlike environment variables (readable only by same UID), command lines are world-readable. This is a well-known anti-pattern but remains common.
+
+**Where to look**:
+- `/proc/[pid]/cmdline` — NUL-delimited command line for each process
+- `ps auxww` — full command lines of all processes
+
+**What to look for**:
+- Arguments matching: `-p <password>`, `--password=`, `--token=`, `--secret=`, `--api-key=`
+- MySQL/PostgreSQL connection strings with embedded passwords: `mysql -u root -p<password>`
+- curl commands with authentication: `curl -u user:password`, `curl -H 'Authorization: Bearer <token>'`
+- SSH/SCP with password arguments (sshpass)
+- Base64-encoded strings in arguments that decode to credentials
+
+**Remediation**:
+```bash
+# Find processes with credential-like arguments
+ps auxww | grep -iE 'password|passwd|secret|token|apikey|api-key' | grep -v grep
+
+# Use configuration files or environment variables instead:
+# MySQL: use ~/.my.cnf with [client] section
+# curl: use .netrc or --netrc-file
+# General: use credential files with 600 permissions
+
+# For MySQL specifically:
+# Instead of: mysql -u root -pMyPassword
+# Use: mysql --defaults-file=/root/.my.cnf
+```
+
+---
+
+### 9.3 Swap/core dump credential leakage
+
+**Threat**: Process memory containing credentials can be written to disk via swap or core dumps. Swap is typically unencrypted, meaning any secret held in memory (decrypted passwords, session tokens, private keys) can be recovered from the swap partition. Core dumps capture full process memory and may be stored in world-readable locations.
+
+**Where to look**:
+- `/proc/sys/fs/suid_dumpable` — controls whether setuid processes dump core (0=disabled, 2=suidsafe)
+- `/proc/sys/kernel/core_pattern` — where core dumps are written (may include `|` for pipe to collector)
+- `/etc/security/limits.conf` — core file size limits
+- `swapon --show` or `/proc/swaps` — active swap devices
+- `/etc/fstab` — swap partition configuration (check if encrypted)
+- `/var/crash/`, `/var/lib/systemd/coredump/` — stored core dumps
+
+**What to look for**:
+- `suid_dumpable` set to 1 (full dumps of privileged processes) — should be 0 or 2
+- `core_pattern` writing to world-readable directories
+- Existing core dumps containing sensitive data: `strings /var/crash/*.crash | grep -i password`
+- Unencrypted swap partitions (no dm-crypt/LUKS layer)
+- No `mlock()` usage by security-sensitive applications (allows secrets to be swapped out)
+
+**Remediation**:
+```bash
+# Disable core dumps for setuid binaries
+echo 0 > /proc/sys/fs/suid_dumpable
+echo 'fs.suid_dumpable = 0' >> /etc/sysctl.d/99-security.conf
+
+# Restrict core dumps
+echo '* hard core 0' >> /etc/security/limits.conf
+
+# Clean up existing core dumps
+rm -f /var/crash/*.crash
+rm -f /var/lib/systemd/coredump/core.*
+
+# Encrypt swap (if not already)
+# Use LUKS-encrypted swap or zram (compressed in-memory swap)
+```
