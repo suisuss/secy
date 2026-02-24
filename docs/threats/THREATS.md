@@ -148,6 +148,14 @@ Not detection techniques, but infrastructure that determines whether detections 
 | 10.3 | File capabilities on binaries | **N** | — | getcap showing cap_setuid, cap_net_raw, etc. on unexpected binaries |
 | 10.4 | Polkit rule manipulation | **N** | — | /etc/polkit-1/rules.d/ granting unauthorized privilege escalation |
 
+## 11. Display/session attacks
+
+| # | Technique | Covered | Where | Notes |
+|---|-----------|---------|-------|-------|
+| 11.1 | X11 keylogging via DISPLAY access | **N** | — | Any X client can capture keystrokes without touching /dev/input |
+| 11.2 | Xauthority permission exposure | **N** | — | .Xauthority readable by other users grants full display access |
+| 11.3 | Clipboard monitoring (clipjacking) | **N** | — | Tools watching clipboard for passwords, crypto addresses |
+
 ---
 
 ## Gap summary
@@ -188,6 +196,9 @@ Could be added within the current architecture (read-only container, build-time 
 | 10.2 | Sudo env_keep preserving injection vars | Parse sudoers for env_keep containing LD_PRELOAD, PYTHONPATH, LD_LIBRARY_PATH, PERL5LIB |
 | 10.3 | File capabilities on binaries | Run getcap -r on /usr/bin, /usr/sbin, /usr/local/bin; flag cap_setuid, cap_dac_override on non-standard binaries |
 | 10.4 | Polkit rule manipulation | Enumerate /etc/polkit-1/rules.d/ and /usr/share/polkit-1/rules.d/; flag rules not from packages |
+| 11.1 | X11 keylogging via DISPLAY access | Check DISPLAY env var exposure; enumerate processes with X11 connections; detect xdotool/xspy/xinput |
+| 11.2 | Xauthority permission exposure | Check ~/.Xauthority permissions; flag world/group-readable Xauthority files |
+| 11.3 | Clipboard monitoring (clipjacking) | Detect xclip/xsel/wl-paste in long-running loops; check for clipboard manager processes |
 | 2.10 | Process tree analysis | Read PPid from /proc/[pid]/status; reconstruct parent→child chains; flag anomalous spawning patterns |
 | 2.11 | Process memory scanning | Read /proc/[pid]/mem (requires CAP_SYS_PTRACE); scan for IoC strings, shellcode patterns |
 | 2.12 | Loaded library verification | Parse /proc/[pid]/maps; hash mapped .so files; compare against package md5sums |
