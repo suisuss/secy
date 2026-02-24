@@ -19,7 +19,7 @@ _build_sed_file() {
         return 1
     fi
 
-    > "$sed_file"
+    true > "$sed_file"
 
     local delim=$'\x01'
 

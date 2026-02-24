@@ -411,7 +411,8 @@ run_c2_analysis() {
     local system_prompt
     system_prompt="$(cat "$c2_prompt")"
 
-    local prompt="## C2 Correlation Review
+    local prompt
+    prompt="## C2 Correlation Review
 
 ${#findings_ref[@]} new finding(s) from subordinate services require cross-service analysis.
 
