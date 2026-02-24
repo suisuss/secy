@@ -13,7 +13,7 @@ inc_pass() { PASS=$((PASS + 1)); }
 inc_fail() { FAIL=$((FAIL + 1)); }
 
 TMPDIR="$(mktemp -d /tmp/sread-mime-test.XXXXXX)"
-trap "rm -rf '$TMPDIR'" EXIT
+trap 'rm -rf "$TMPDIR"' EXIT
 
 # Create test files with known content
 create_text_file()   { echo "PermitRootLogin no" > "${TMPDIR}/sshd_config"; }

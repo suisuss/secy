@@ -4,19 +4,19 @@
 set -euo pipefail
 
 SREAD_ROOT="${SREAD_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-SREAD_CONF="${SREAD_ROOT}/conf"
-SREAD_LIB="${SREAD_ROOT}/lib"
+export SREAD_CONF="${SREAD_ROOT}/conf"
+export SREAD_LIB="${SREAD_ROOT}/lib"
 
 # Colors (disabled if not a terminal)
 if [[ -t 1 ]]; then
-    RED='\033[0;31m'
-    GREEN='\033[0;32m'
-    YELLOW='\033[1;33m'
-    BLUE='\033[0;34m'
-    BOLD='\033[1m'
-    RESET='\033[0m'
+    export RED='\033[0;31m'
+    export GREEN='\033[0;32m'
+    export YELLOW='\033[1;33m'
+    export BLUE='\033[0;34m'
+    export BOLD='\033[1m'
+    export RESET='\033[0m'
 else
-    RED='' GREEN='' YELLOW='' BLUE='' BOLD='' RESET=''
+    export RED='' GREEN='' YELLOW='' BLUE='' BOLD='' RESET=''
 fi
 
 log_info()  { echo -e "${BLUE}[sread]${RESET} $*"; }

@@ -99,8 +99,6 @@ run() {
     # ── 10.3 File capabilities on binaries ─────────────────────────────
     echo "--- File capabilities on binaries ---"
 
-    local dangerous_caps="cap_setuid|cap_setgid|cap_dac_override|cap_dac_read_search|cap_sys_admin|cap_sys_ptrace|cap_sys_module|cap_net_raw"
-
     # Known-good allowlist: binary|capability
     local -A allowlist=(
         ["/usr/bin/ping|cap_net_raw"]="1"

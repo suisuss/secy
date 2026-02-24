@@ -309,8 +309,8 @@ ${file_details}
 _WATCH_LAST_DIRECTIVE_CHECK=0
 
 on_watch_event() {
-    local event="$1"
-    local filename="$2"
+    local _event="$1"
+    local _filename="$2"
 
     # Periodically check for C2 directives
     local now

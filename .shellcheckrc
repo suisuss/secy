@@ -1,0 +1,6 @@
+# Modules are sourced by sread dispatcher — no shebang expected
+disable=SC2148
+
+# Source paths are dynamic (SREAD_ROOT is set at runtime)
+disable=SC1090
+disable=SC1091
