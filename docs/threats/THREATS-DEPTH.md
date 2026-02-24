@@ -2781,3 +2781,115 @@ done
 sudo rm /etc/polkit-1/rules.d/malicious.rules
 sudo systemctl restart polkit
 ```
+
+---
+
+## 11. Display/session attacks
+
+### 11.1 X11 keylogging via DISPLAY access
+
+**Threat**: The X11 protocol has no isolation between clients. Any process that can connect to the X server (has `DISPLAY` set and valid Xauthority) can capture all keystrokes from all windows using `XQueryKeymap`, `XGrabKeyboard`, or the XTEST extension. This works without any elevated privileges and without touching `/dev/input`. On Wayland this is mitigated, but many systems still run X11 or XWayland.
+
+**Where to look**:
+- `/proc/[pid]/environ` — processes with `DISPLAY` variable set
+- Process list — look for `xinput`, `xspy`, `xdotool`, `xdotool key --clearmodifiers`
+- X11 connections — `xlsclients` or `xdpyinfo`
+
+**What to look for**:
+- Processes using X11 test/record extensions: `xinput test`, `xdotool`, `xspy`, `xev`
+- Unknown processes with active X11 connections that aren't GUI applications
+- Processes calling `XQueryKeymap` or `XRecordCreateContext` (detectable via strace/ltrace, but not from /proc alone)
+- Shell scripts or Python scripts using `python-xlib` or `Xlib` imports
+- `DISPLAY` set in non-interactive processes (daemons, cron jobs) — they shouldn't need display access
+
+**Remediation**:
+```bash
+# Check if running X11 or Wayland
+echo $XDG_SESSION_TYPE  # "x11" or "wayland"
+
+# List X11 clients
+xlsclients
+
+# Check for known keylogger tools
+pgrep -af 'xinput|xspy|xdotool|xev'
+
+# Migrate to Wayland (long-term fix)
+# Wayland isolates clients — no cross-application keystroke capture
+
+# Restrict XTEST extension (partial mitigation)
+# In xorg.conf: Section "Extensions" -> Option "XTEST" "false"
+```
+
+---
+
+### 11.2 Xauthority permission exposure
+
+**Threat**: The `.Xauthority` file contains the MIT-MAGIC-COOKIE used to authenticate X11 connections. If this file is readable by other users, they can connect to the victim's X display and capture keystrokes, take screenshots, or inject input. This is equivalent to full display access.
+
+**Where to look**:
+- `~/.Xauthority` — per-user X11 authentication cookie
+- `/tmp/.X11-unix/` — X11 socket files
+- `XAUTHORITY` environment variable — may point to non-standard location
+
+**What to look for**:
+- `.Xauthority` with permissions other than 600 (owner read/write only)
+- `.Xauthority` owned by wrong user or group
+- `XAUTHORITY` environment variable pointing to shared or world-readable location
+- Multiple users with access to the same `.Xauthority` file
+- SSH X11 forwarding with overly permissive xauth entries: `xauth list`
+
+**Remediation**:
+```bash
+# Check Xauthority permissions
+stat -c '%a %U %G %n' ~/.Xauthority
+
+# Fix permissions
+chmod 600 ~/.Xauthority
+chown $(whoami):$(id -gn) ~/.Xauthority
+
+# List xauth entries (check for unexpected hosts)
+xauth list
+
+# Remove stale or suspicious entries
+xauth remove <display>
+
+# Disable X11 forwarding in SSH if not needed
+# In /etc/ssh/sshd_config: X11Forwarding no
+```
+
+---
+
+### 11.3 Clipboard monitoring (clipjacking)
+
+**Threat**: Clipboard monitoring tools can silently watch for passwords, cryptocurrency addresses, or other sensitive data copied to the clipboard. On X11, any process with display access can read the clipboard. Attackers can also replace clipboard contents — substituting a cryptocurrency address with their own (clipjacking).
+
+**Where to look**:
+- Process list — clipboard tools: `xclip`, `xsel`, `wl-paste`, `wl-copy`, `parcellite`, `clipit`
+- `/proc/[pid]/cmdline` — look for clipboard commands in loops or watch patterns
+- Cron entries or autostart entries referencing clipboard tools
+
+**What to look for**:
+- `xclip -selection clipboard -o` or `xsel --clipboard --output` running in loops or watch scripts
+- `wl-paste --watch` on Wayland — monitors clipboard changes
+- Unknown clipboard manager processes (not the user's chosen clipboard manager)
+- Scripts that read clipboard content and pipe to `curl`, `wget`, or file writes
+- Processes that both read and write clipboard — may be replacing content (clipjacking)
+- Long-running processes with both X11 access and network connections — potential clipboard exfiltration
+
+**Remediation**:
+```bash
+# Check for clipboard monitoring processes
+pgrep -af 'xclip|xsel|wl-paste|wl-copy|parcellite|clipit'
+
+# Check for clipboard in cron
+crontab -l | grep -iE 'xclip|xsel|clipboard'
+
+# Check autostart for clipboard monitors
+grep -rl 'xclip\|xsel\|clipboard' ~/.config/autostart/ /etc/xdg/autostart/ 2>/dev/null
+
+# Kill suspicious clipboard monitors
+kill <pid>
+
+# Use a trusted clipboard manager with history limits
+# Clear clipboard after paste (KeePassXC does this automatically)
+```
