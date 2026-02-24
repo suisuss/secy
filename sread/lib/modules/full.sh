@@ -15,7 +15,7 @@ run() {
     echo "  OS: $(cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d= -f2 | tr -d '"')"
     echo "================================================================"
 
-    local modules=(ports services packages pkgverify users firewall sysctl cron setuid world tamper spyproc preload kmod ebpf autostart netconn desktop xattr mounts dnstun firmware)
+    local modules=(ports services packages pkgverify users firewall sysctl cron setuid world tamper spyproc preload kmod ebpf autostart netconn desktop userpersist xattr mounts dnstun firmware)
     for mod in "${modules[@]}"; do
         if [[ -f "${SREAD_ROOT}/lib/modules/${mod}.sh" ]]; then
             log_info "Running module: ${mod}"

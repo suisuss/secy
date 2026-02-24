@@ -27,10 +27,10 @@ Techniques for finding sophisticatedly hidden malicious programs on a Linux syst
 | 1.9 | LD_PRELOAD per-process (environ) | **Y** | `sread preload` | Scans /proc/[pid]/environ for LD_PRELOAD= |
 | 1.10 | PAM module tampering (pam_exec, pam_script) | **Y** | `sread preload` | Greps pam.d for suspicious modules |
 | 1.11 | Suspicious shared libraries in ld cache | **Y** | `sread preload` | Searches ldconfig -p for spy/hook/inject patterns |
-| 1.12 | SSH authorized_keys persistence | **N** | — | New keys in ~/.ssh/authorized_keys, forced commands, non-standard AuthorizedKeysFile paths |
-| 1.13 | Systemd drop-in overrides | **N** | — | /etc/systemd/system/*.d/override.conf replacing ExecStart; generators; socket activation hijacking |
-| 1.14 | Git hook persistence | **N** | — | Malicious .git/hooks/, global core.hooksPath, url.*.insteadOf remote rewriting |
-| 1.15 | D-Bus service hijacking | **N** | — | User-writable ~/.local/share/dbus-1/services/ intercepting service activation; permissive system bus policies |
+| 1.12 | SSH authorized_keys persistence | **Y** | `sread userpersist` | New keys in ~/.ssh/authorized_keys, forced commands, non-standard AuthorizedKeysFile paths |
+| 1.13 | Systemd drop-in overrides | **Y** | `sread userpersist` | /etc/systemd/system/*.d/override.conf replacing ExecStart; generators; socket activation hijacking |
+| 1.14 | Git hook persistence | **Y** | `sread userpersist` | Malicious .git/hooks/, global core.hooksPath, url.*.insteadOf remote rewriting |
+| 1.15 | D-Bus service hijacking | **Y** | `sread userpersist` | User-writable ~/.local/share/dbus-1/services/ intercepting service activation; permissive system bus policies |
 
 ## 2. Process-level hiding
 
@@ -183,10 +183,6 @@ Could be added within the current architecture (read-only container, build-time 
 
 | # | Threat | Implementation path |
 |---|--------|---------------------|
-| 1.12 | SSH authorized_keys persistence | Scan ~/.ssh/authorized_keys for unknown keys, forced commands; check AuthorizedKeysFile in sshd_config for non-standard paths |
-| 1.13 | Systemd drop-in overrides | Enumerate *.d/override.conf dirs under /etc/systemd/system/; check generators; cross-ref against dpkg |
-| 1.14 | Git hook persistence | Scan .git/hooks/ in known repos; check global core.hooksPath and url.*.insteadOf in gitconfig |
-| 1.15 | D-Bus service hijacking | Enumerate ~/.local/share/dbus-1/services/; compare Name= against system services for shadowing |
 | 3.13 | Credential file permission exposure | Scan for .env, *.key, *.pem, credentials.json with world/group-readable permissions; flag sensitive files outside expected permission masks |
 | 5.11 | Container/Docker escape vectors | Check /var/run/docker.sock permissions, docker group membership, privileged container flags, cgroup escape conditions |
 | 9.1 | Credentials in process environment | Scan /proc/[pid]/environ for common credential patterns (API_KEY=, PASSWORD=, TOKEN=, AWS_SECRET) |
