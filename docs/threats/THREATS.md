@@ -65,7 +65,7 @@ Techniques for finding sophisticatedly hidden malicious programs on a Linux syst
 | 3.10 | Extended file attributes (lsattr/chattr) | **P** | `sread perms` | perms.sh runs lsattr but doesn't flag suspicious attributes (e.g., immutable bit on unusual files) |
 | 3.11 | Known rootkit artifact paths | **N** | — | Check for files/dirs installed by known rootkits (rkhunter-style): /dev/.hid, /usr/lib/libproc.a, SHV5/Adore/knark/Diamorphine artifacts |
 | 3.12 | Full filesystem hash database (AIDE/Tripwire-style) | **N** | — | Persistent cryptographic hash DB of all critical files; detects modification of non-packaged files, configs, manually-placed scripts |
-| 3.13 | Credential file permission exposure | **N** | — | .env, key files, configs world-readable or group-readable by unintended groups |
+| 3.13 | Credential file permission exposure | **Y** | `sread credperms` | .env, key files, configs world-readable or group-readable by unintended groups |
 
 ## 4. Kernel-level (rootkits)
 
@@ -94,7 +94,7 @@ Techniques for finding sophisticatedly hidden malicious programs on a Linux syst
 | 5.8 | Conntrack / NAT translation analysis | **N** | — | /proc/net/nf_conntrack reveals hidden destinations behind NAT |
 | 5.9 | Socket inode → PID correlation | **Y** | `sread netconn` | _find_proc_by_inode helper; also recommended as host-side ss -tnp |
 | 5.10 | C2 / malicious IP reputation matching | **N** | — | Cross-reference established connections against known-bad IP databases (Feodo Tracker, abuse.ch); bakeable at build time like hash DB |
-| 5.11 | Container/Docker escape vectors | **N** | — | Docker socket permissions, privileged containers, docker group membership, cgroup escape |
+| 5.11 | Container/Docker escape vectors | **Y** | `sread container` | Docker socket permissions, privileged containers, docker group membership, cgroup escape |
 
 ## 6. Firmware / hardware
 
@@ -135,26 +135,26 @@ Not detection techniques, but infrastructure that determines whether detections 
 
 | # | Technique | Covered | Where | Notes |
 |---|-----------|---------|-------|-------|
-| 9.1 | Credentials in process environment | **N** | — | /proc/[pid]/environ containing API keys, DB passwords, cloud tokens |
-| 9.2 | Credentials in process command line | **N** | — | /proc/[pid]/cmdline with passwords as CLI arguments |
-| 9.3 | Swap/core dump credential leakage | **N** | — | suid_dumpable sysctl, core dump storage, swap containing cleartext |
+| 9.1 | Credentials in process environment | **Y** | `sread credexpose` | /proc/[pid]/environ containing API keys, DB passwords, cloud tokens |
+| 9.2 | Credentials in process command line | **Y** | `sread credexpose` | /proc/[pid]/cmdline with passwords as CLI arguments |
+| 9.3 | Swap/core dump credential leakage | **Y** | `sread credexpose` | suid_dumpable sysctl, core dump storage, swap containing cleartext |
 
 ## 10. Privilege escalation misconfigurations
 
 | # | Technique | Covered | Where | Notes |
 |---|-----------|---------|-------|-------|
-| 10.1 | Sudo NOPASSWD with GTFOBins | **N** | — | NOPASSWD entries for vim, find, python, etc. that trivially give root shells |
-| 10.2 | Sudo env_keep preserving injection vars | **N** | — | LD_PRELOAD, PYTHONPATH, LD_LIBRARY_PATH kept through sudo |
-| 10.3 | File capabilities on binaries | **N** | — | getcap showing cap_setuid, cap_net_raw, etc. on unexpected binaries |
-| 10.4 | Polkit rule manipulation | **N** | — | /etc/polkit-1/rules.d/ granting unauthorized privilege escalation |
+| 10.1 | Sudo NOPASSWD with GTFOBins | **Y** | `sread privesc` | NOPASSWD entries for vim, find, python, etc. that trivially give root shells |
+| 10.2 | Sudo env_keep preserving injection vars | **Y** | `sread privesc` | LD_PRELOAD, PYTHONPATH, LD_LIBRARY_PATH kept through sudo |
+| 10.3 | File capabilities on binaries | **Y** | `sread privesc` | getcap showing cap_setuid, cap_net_raw, etc. on unexpected binaries |
+| 10.4 | Polkit rule manipulation | **Y** | `sread privesc` | /etc/polkit-1/rules.d/ granting unauthorized privilege escalation |
 
 ## 11. Display/session attacks
 
 | # | Technique | Covered | Where | Notes |
 |---|-----------|---------|-------|-------|
-| 11.1 | X11 keylogging via DISPLAY access | **N** | — | Any X client can capture keystrokes without touching /dev/input |
-| 11.2 | Xauthority permission exposure | **N** | — | .Xauthority readable by other users grants full display access |
-| 11.3 | Clipboard monitoring (clipjacking) | **N** | — | Tools watching clipboard for passwords, crypto addresses |
+| 11.1 | X11 keylogging via DISPLAY access | **Y** | `sread display` | Any X client can capture keystrokes without touching /dev/input |
+| 11.2 | Xauthority permission exposure | **Y** | `sread display` | .Xauthority readable by other users grants full display access |
+| 11.3 | Clipboard monitoring (clipjacking) | **Y** | `sread display` | Tools watching clipboard for passwords, crypto addresses |
 
 ---
 
@@ -183,18 +183,6 @@ Could be added within the current architecture (read-only container, build-time 
 
 | # | Threat | Implementation path |
 |---|--------|---------------------|
-| 3.13 | Credential file permission exposure | Scan for .env, *.key, *.pem, credentials.json with world/group-readable permissions; flag sensitive files outside expected permission masks |
-| 5.11 | Container/Docker escape vectors | Check /var/run/docker.sock permissions, docker group membership, privileged container flags, cgroup escape conditions |
-| 9.1 | Credentials in process environment | Scan /proc/[pid]/environ for common credential patterns (API_KEY=, PASSWORD=, TOKEN=, AWS_SECRET) |
-| 9.2 | Credentials in process command line | Scan /proc/[pid]/cmdline for password-like arguments; flag -p, --password, --token with values |
-| 9.3 | Swap/core dump credential leakage | Check suid_dumpable sysctl, core_pattern config, swap partition encryption status |
-| 10.1 | Sudo NOPASSWD with GTFOBins | Parse /etc/sudoers and /etc/sudoers.d/*; match NOPASSWD commands against GTFOBins list |
-| 10.2 | Sudo env_keep preserving injection vars | Parse sudoers for env_keep containing LD_PRELOAD, PYTHONPATH, LD_LIBRARY_PATH, PERL5LIB |
-| 10.3 | File capabilities on binaries | Run getcap -r on /usr/bin, /usr/sbin, /usr/local/bin; flag cap_setuid, cap_dac_override on non-standard binaries |
-| 10.4 | Polkit rule manipulation | Enumerate /etc/polkit-1/rules.d/ and /usr/share/polkit-1/rules.d/; flag rules not from packages |
-| 11.1 | X11 keylogging via DISPLAY access | Check DISPLAY env var exposure; enumerate processes with X11 connections; detect xdotool/xspy/xinput |
-| 11.2 | Xauthority permission exposure | Check ~/.Xauthority permissions; flag world/group-readable Xauthority files |
-| 11.3 | Clipboard monitoring (clipjacking) | Detect xclip/xsel/wl-paste in long-running loops; check for clipboard manager processes |
 | 2.10 | Process tree analysis | Read PPid from /proc/[pid]/status; reconstruct parent→child chains; flag anomalous spawning patterns |
 | 2.11 | Process memory scanning | Read /proc/[pid]/mem (requires CAP_SYS_PTRACE); scan for IoC strings, shellcode patterns |
 | 2.12 | Loaded library verification | Parse /proc/[pid]/maps; hash mapped .so files; compare against package md5sums |
