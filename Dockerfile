@@ -29,6 +29,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     binutils \
     poppler-utils \
     inotify-tools \
+    libcap2-bin \
     && rm -rf /var/lib/apt/lists/*
 
 # Node.js runtime + globally-installed CLI tools from build stage
