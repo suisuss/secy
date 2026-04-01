@@ -39,6 +39,10 @@ pkgverify      3600              low
 tamper         3600              low
 autostart      1800              medium
 netconn        300               high
+netthreats     120               high
+tmpexec        120               high
+proctree       300               high
+mountsec       3600              medium
 desktop        1800              low
 surveil        1800              low"
 

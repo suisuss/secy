@@ -132,6 +132,39 @@ assert "5.1"  "TCP listener on :31337"        netconn "0\.0\.0\.0:31337"
 echo ""
 
 # ══════════════════════════════════════════════════════════════════════
+# TMPEXEC MODULE
+# ══════════════════════════════════════════════════════════════════════
+echo "── tmpexec ───────────────────────────────────────────────────"
+assert "TX-1" "Process running from /tmp"     tmpexec "exe=.*/tmp/"
+assert "TX-2" "Script file in /tmp (ld.py)"   tmpexec "ld\.py"
+assert "TX-3" "Hidden file in /tmp"           tmpexec "\.a1b2c3|\.beacon"
+assert "TX-4" "Executable in /tmp"            tmpexec "\.a1b2c3.*bytes|\.beacon.*bytes"
+echo ""
+
+# ══════════════════════════════════════════════════════════════════════
+# PROCTREE MODULE
+# ══════════════════════════════════════════════════════════════════════
+echo "── proctree ──────────────────────────────────────────────────"
+assert "PT-1" "Orphaned process (PPID=1)"     proctree "PPID=1"
+assert "PT-2" "Session leader no terminal"    proctree "session leader, no terminal"
+echo ""
+
+# ══════════════════════════════════════════════════════════════════════
+# MOUNTSEC MODULE
+# ══════════════════════════════════════════════════════════════════════
+echo "── mountsec ──────────────────────────────────────────────────"
+assert "MS-1" "Temp dir mount check"          mountsec "/tmp"
+echo ""
+
+# ══════════════════════════════════════════════════════════════════════
+# NETTHREATS MODULE
+# ══════════════════════════════════════════════════════════════════════
+echo "── netthreats ────────────────────────────────────────────────"
+skip  "NT-1" "Non-allowed port connection"    "requires outbound to external IP"
+skip  "NT-2" "Beacon detection"               "requires multiple runs with --state-dir"
+echo ""
+
+# ══════════════════════════════════════════════════════════════════════
 # SKIPPED (not testable in container)
 # ══════════════════════════════════════════════════════════════════════
 echo "── skipped ───────────────────────────────────────────────────"
