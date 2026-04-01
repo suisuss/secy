@@ -103,15 +103,10 @@ run() {
     # ── 3. Issues directory ────────────────────────────────────────
     echo "--- Issues directory ---"
     local issues_dir=""
-    # Find secy issues dir relative to the notify script
-    if [[ -f "$service_file" ]]; then
-        local exec_line
-        exec_line="$(grep '^ExecStart=' "$service_file" 2>/dev/null | sed 's/^ExecStart=//' | sed "s|%h|${user_home}|g")"
-        if [[ -n "$exec_line" ]]; then
-            local secy_root
-            secy_root="$(dirname "$(dirname "${root}${exec_line}")")"
-            issues_dir="${secy_root}/issues"
-        fi
+    # Default data location: ~/.local/share/secy
+    local data_dir="${user_home}/.local/share/secy"
+    if [[ -d "${data_dir}/issues" ]]; then
+        issues_dir="${data_dir}/issues"
     fi
 
     if [[ -n "$issues_dir" ]] && [[ -d "$issues_dir" ]]; then

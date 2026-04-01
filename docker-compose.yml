@@ -10,14 +10,13 @@ services:
       # - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
 
     volumes:
-      # Internal state — named volume shared between all secy services.
+      # State — bind-mounted from host so it's inspectable and portable.
       # Contains findings, directives, patrol runs, watch queue, c2 progress.
-      # Not directly visible on host — use 'docker compose exec' to inspect.
-      - secy-state:/var/lib/secy/state
+      - ${SECY_DATA_DIR:-${HOME}/.local/share/secy}/state:/var/lib/secy/state
 
       # Issues — bind-mounted to host so the user can review and delete.
       # This is the only human-facing output directory.
-      - ./issues:/var/lib/secy/state/issues
+      - ${SECY_DATA_DIR:-${HOME}/.local/share/secy}/issues:/var/lib/secy/state/issues
 
       # Host filesystem mounted read-only at /host
       - /:/host:ro
@@ -76,8 +75,8 @@ services:
       # - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
 
     volumes:
-      - secy-state:/var/lib/secy/state
-      - ./issues:/var/lib/secy/state/issues
+      - ${SECY_DATA_DIR:-${HOME}/.local/share/secy}/state:/var/lib/secy/state
+      - ${SECY_DATA_DIR:-${HOME}/.local/share/secy}/issues:/var/lib/secy/state/issues
       - /:/host:ro
       - ${HOME}/.claude/.credentials.json:/mnt/claude-credentials.json:ro
 
@@ -113,8 +112,8 @@ services:
       # - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
 
     volumes:
-      - secy-state:/var/lib/secy/state
-      - ./issues:/var/lib/secy/state/issues
+      - ${SECY_DATA_DIR:-${HOME}/.local/share/secy}/state:/var/lib/secy/state
+      - ${SECY_DATA_DIR:-${HOME}/.local/share/secy}/issues:/var/lib/secy/state/issues
       - /:/host:ro
       - ${HOME}/.claude/.credentials.json:/mnt/claude-credentials.json:ro
 
@@ -150,8 +149,8 @@ services:
       # - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
 
     volumes:
-      - secy-state:/var/lib/secy/state
-      - ./issues:/var/lib/secy/state/issues
+      - ${SECY_DATA_DIR:-${HOME}/.local/share/secy}/state:/var/lib/secy/state
+      - ${SECY_DATA_DIR:-${HOME}/.local/share/secy}/issues:/var/lib/secy/state/issues
       - /:/host:ro
       - ${HOME}/.claude/.credentials.json:/mnt/claude-credentials.json:ro
 
@@ -204,8 +203,9 @@ services:
       - SREAD_ROOT=/usr/local/lib/sread
     volumes:
       - threatlab-fs:/host:ro
-      - secy-state:/var/lib/secy/state
       - ./threatlab/run-tests.sh:/opt/threatlab/run-tests.sh:ro
+    tmpfs:
+      - /var/lib/secy/state:size=64m
     depends_on:
       threatlab:
         condition: service_healthy
@@ -213,5 +213,4 @@ services:
     profiles: ["test"]
 
 volumes:
-  secy-state:
   threatlab-fs:

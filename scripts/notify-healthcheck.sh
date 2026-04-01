@@ -6,6 +6,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SECY_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+export SECY_DATA_DIR="${SECY_DATA_DIR:-${HOME}/.local/share/secy}"
 LOG_FILE="${SCRIPT_DIR}/.notify-healthcheck.log"
 
 # Rotate log if > 100KB

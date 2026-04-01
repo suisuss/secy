@@ -12,6 +12,8 @@
 set -euo pipefail
 
 SECY_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+SECY_DATA_DIR="${SECY_DATA_DIR:-${HOME}/.local/share/secy}"
+export SECY_DATA_DIR
 
 # ── Colors ────────────────────────────────────────────────────────
 
@@ -117,18 +119,19 @@ doctor() {
         fi
     fi
 
-    # Issues directory
-    if [[ -d "${SECY_DIR}/issues" ]]; then
+    # Data directory
+    info "Data dir: ${SECY_DATA_DIR}"
+    if [[ -d "${SECY_DATA_DIR}" ]]; then
         local owner
-        owner="$(stat -c%U "${SECY_DIR}/issues" 2>/dev/null || echo "?")"
+        owner="$(stat -c%U "${SECY_DATA_DIR}" 2>/dev/null || echo "?")"
         if [[ "$owner" == "$(whoami)" ]]; then
-            info "Issues dir: OK (owned by $(whoami))"
+            info "Data dir: OK (owned by $(whoami))"
         else
-            warn "Issues dir: owned by ${owner} — notifications may not work"
-            warn "  Fix: sudo chown \$USER:\$USER ${SECY_DIR}/issues"
+            warn "Data dir: owned by ${owner} — containers may not be able to write"
+            warn "  Fix: sudo chown -R \$USER:\$USER ${SECY_DATA_DIR}"
         fi
     else
-        info "Issues dir: will be created on install"
+        info "Data dir: will be created on install"
     fi
 
     echo ""
@@ -158,8 +161,16 @@ do_install() {
 
     # ── 2. Create host directories ────────────────────────────────
     header "Creating directories"
-    mkdir -p "${SECY_DIR}/issues"
-    info "issues/ directory ready"
+    mkdir -p "${SECY_DATA_DIR}/issues"
+    mkdir -p "${SECY_DATA_DIR}/state"
+    # Container runs as root (UID 0) — needs write access to bind-mounted dirs.
+    # 1777 (sticky + world-writable) matches /tmp semantics: anyone can write,
+    # only owner can delete their files.
+    chmod 1777 "${SECY_DATA_DIR}/state"
+    chmod 1777 "${SECY_DATA_DIR}/issues"
+    info "Data directory: ${SECY_DATA_DIR}"
+    info "  issues/  — desktop notifications + user review"
+    info "  state/   — patrol history, findings, baselines"
 
     # ── 3. Build Docker image ─────────────────────────────────────
     header "Building Docker image"
@@ -219,17 +230,7 @@ do_uninstall() {
     info "Stopping containers..."
     docker compose -f "${SECY_DIR}/docker-compose.yml" down 2>/dev/null || true
 
-    # ── 3. Remove volumes ─────────────────────────────────────────
-    echo ""
-    read -rp "Remove secy-state volume? This deletes all patrol history and findings. [y/N] " answer
-    if [[ "$answer" =~ ^[Yy]$ ]]; then
-        docker compose -f "${SECY_DIR}/docker-compose.yml" down -v 2>/dev/null || true
-        info "Volumes removed"
-    else
-        info "Volumes kept"
-    fi
-
-    # ── 4. Remove images ──────────────────────────────────────────
+    # ── 3. Remove images ─────────────────────────────────────────
     echo ""
     read -rp "Remove Docker images? You'll need to rebuild on next install. [y/N] " answer
     if [[ "$answer" =~ ^[Yy]$ ]]; then
@@ -240,14 +241,21 @@ do_uninstall() {
         info "Images kept"
     fi
 
-    # ── 5. Clean up issue files ───────────────────────────────────
+    # ── 4. Remove data directory ──────────────────────────────────
     echo ""
-    read -rp "Remove issue files in ./issues/? [y/N] " answer
-    if [[ "$answer" =~ ^[Yy]$ ]]; then
-        rm -f "${SECY_DIR}"/issues/*.md
-        info "Issues cleaned"
-    else
-        info "Issues kept"
+    echo "Data directory: ${SECY_DATA_DIR}"
+    if [[ -d "${SECY_DATA_DIR}" ]]; then
+        local issue_count state_size
+        issue_count="$(find "${SECY_DATA_DIR}/issues" -name '*.md' -type f 2>/dev/null | wc -l)"
+        state_size="$(du -sh "${SECY_DATA_DIR}/state" 2>/dev/null | cut -f1 || echo "0")"
+        echo "  ${issue_count} issue(s), ${state_size} state data"
+        read -rp "Remove data directory? This deletes all history, findings, and issues. [y/N] " answer
+        if [[ "$answer" =~ ^[Yy]$ ]]; then
+            rm -rf "${SECY_DATA_DIR}"
+            info "Data directory removed"
+        else
+            info "Data directory kept at ${SECY_DATA_DIR}"
+        fi
     fi
 
     echo ""
@@ -262,7 +270,7 @@ do_start() {
     header "secy start"
 
     # Check image exists
-    if ! docker image inspect secy &>/dev/null; then
+    if ! docker images --format '{{.Repository}}' 2>/dev/null | grep -q "^secy"; then
         error "secy image not found. Run ./setup.sh install first."
         exit 1
     fi
@@ -310,9 +318,9 @@ do_status() {
 
     # ── Docker image ──────────────────────────────────────────────
     echo -e "${BOLD}Image:${RESET}"
-    if docker image inspect secy &>/dev/null; then
+    if docker images --format '{{.Repository}}' 2>/dev/null | grep -q "^secy"; then
         local image_created
-        image_created="$(docker image inspect secy --format '{{.Created}}' 2>/dev/null | cut -d. -f1)"
+        image_created="$(docker images --format '{{.CreatedAt}}' --filter 'reference=secy*' 2>/dev/null | head -1 | cut -d' ' -f1)"
         info "  secy image: built ${image_created}"
     else
         error "  secy image: not built"
@@ -357,14 +365,19 @@ do_status() {
     fi
     echo ""
 
-    # ── Issues ────────────────────────────────────────────────────
-    echo -e "${BOLD}Issues:${RESET}"
-    if [[ -d "${SECY_DIR}/issues" ]]; then
+    # ── Data ──────────────────────────────────────────────────────
+    echo -e "${BOLD}Data (${SECY_DATA_DIR}):${RESET}"
+    if [[ -d "${SECY_DATA_DIR}" ]]; then
         local count
-        count="$(find "${SECY_DIR}/issues" -maxdepth 1 -name '*.md' -type f 2>/dev/null | wc -l)"
-        info "  ${count} issue(s) on file in ./issues/"
+        count="$(find "${SECY_DATA_DIR}/issues" -maxdepth 1 -name '*.md' -type f 2>/dev/null | wc -l)"
+        info "  ${count} issue(s) in issues/"
+        if [[ -d "${SECY_DATA_DIR}/state" ]]; then
+            local state_size
+            state_size="$(du -sh "${SECY_DATA_DIR}/state" 2>/dev/null | cut -f1 || echo "0")"
+            info "  ${state_size} in state/"
+        fi
     else
-        warn "  issues/ directory not found"
+        warn "  data directory not found — run ./setup.sh install"
     fi
 
     # ── Auth ──────────────────────────────────────────────────────

@@ -11,7 +11,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SECY_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
-ISSUES_DIR="${SECY_DIR}/issues"
+SECY_DATA_DIR="${SECY_DATA_DIR:-${HOME}/.local/share/secy}"
+ISSUES_DIR="${SECY_DATA_DIR}/issues"
 PID_FILE="${SCRIPT_DIR}/.notify.pid"
 
 # Notification settings

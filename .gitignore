@@ -1,7 +1,7 @@
 # Runtime state (baselines, findings, progress, locks)
 state/
 
-# Issues — bind-mounted from host, runtime output
+# Issues — previously in-repo, now at ~/.local/share/secy/issues/
 issues/
 
 .env
