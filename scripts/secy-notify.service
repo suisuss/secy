@@ -1,0 +1,13 @@
+[Unit]
+Description=secy desktop notification watcher
+After=graphical-session.target
+PartOf=graphical-session.target
+
+[Service]
+Type=simple
+ExecStart=%h/.programming/sandbox/secy/scripts/notify.sh
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=graphical-session.target
