@@ -53,7 +53,7 @@ install_service() {
     info "Installing systemd user service..."
 
     mkdir -p "$SYSTEMD_USER_DIR"
-    cp "${SCRIPT_DIR}/${SERVICE_FILE}" "${SYSTEMD_USER_DIR}/${SERVICE_FILE}"
+    sed "s|__SECY_DIR__|${SECY_DIR}|g" "${SCRIPT_DIR}/${SERVICE_FILE}" > "${SYSTEMD_USER_DIR}/${SERVICE_FILE}"
 
     systemctl --user daemon-reload
     systemctl --user enable "$SERVICE_NAME"

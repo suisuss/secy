@@ -5,3 +5,7 @@ state/
 issues/
 
 .env
+scripts/.notify-healthcheck.log
+scripts/.notify-healthcheck.log.1
+scripts/.notify.log
+scripts/.notify.pid

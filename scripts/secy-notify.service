@@ -5,7 +5,8 @@ PartOf=graphical-session.target
 
 [Service]
 Type=simple
-ExecStart=%h/.programming/sandbox/secy/scripts/notify.sh
+# __SECY_DIR__ is replaced by setup.sh with the actual install path
+ExecStart=__SECY_DIR__/scripts/notify.sh
 Restart=on-failure
 RestartSec=5
 
