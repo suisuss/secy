@@ -72,9 +72,19 @@ RUN sha256sum \
     /opt/secy/watch.sh \
     /opt/secy/patrol.sh \
     /opt/secy/c2.sh \
+    /opt/secy/lib/secy-common.sh \
+    /opt/secy/lib/agent-common.sh \
+    /opt/secy/lib/c2-common.sh \
+    /opt/secy/lib/patrol-common.sh \
+    /opt/secy/lib/watch-common.sh \
+    /opt/secy/lib/inotify-watch.sh \
+    /opt/secy/lib/format-stream.sh \
     /usr/local/lib/sread/conf/blocked_paths \
     /usr/local/lib/sread/conf/redact_patterns \
     /usr/local/lib/sread/conf/allowed_mimetypes \
+    /usr/local/lib/sread/lib/common.sh \
+    /usr/local/lib/sread/lib/blocklist.sh \
+    /usr/local/lib/sread/lib/redact.sh \
     /usr/local/bin/sread \
     > /opt/secy/integrity.sha256
 
