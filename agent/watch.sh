@@ -285,14 +285,19 @@ ${file_details}
 
 ### Instructions
 
-1. Read each file's metadata above carefully
+1. Assess each file based on the metadata above
 2. If you need more information, use \`sread fileinfo <path>\` or \`sread hash <path>\`
-3. For text-like files, you may use the Read tool to inspect content directly
+3. Do NOT read raw file content — triage from metadata, structure, and indicators only
 4. Write your triage report to: ${findings_file}
 5. Output SECY_COMPLETE when done
 "
 
+    # Watch uses restricted tool set — no Read tool to prevent prompt injection
+    # from untrusted file content. Claude triages from sread metadata only.
+    local _saved_tools="$ALLOWED_TOOLS"
+    ALLOWED_TOOLS="Bash,Write,Grep,Glob"
     invoke_claude "$system_prompt" "$prompt" "$MAX_BUDGET_USD" > /dev/null
+    ALLOWED_TOOLS="$_saved_tools"
 
     if [[ -f "$findings_file" ]]; then
         secy_log "watch" "Triage report written: ${findings_file}"
