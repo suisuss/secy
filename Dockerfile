@@ -58,6 +58,36 @@ RUN chmod +x /opt/secy/secy.sh /opt/secy/entrypoint.sh /opt/secy/watch.sh /opt/s
 # entrypoint.sh copies this into place.
 COPY agent/conf/srt-settings.json /opt/secy/conf/srt-settings.json
 
+# Generate integrity manifest for security-critical files.
+# Verified at container startup by entrypoint.sh.
+RUN sha256sum \
+    /opt/secy/AGENT.md \
+    /opt/secy/WATCH.md \
+    /opt/secy/PATROL.md \
+    /opt/secy/C2.md \
+    /opt/secy/conf/agent.conf \
+    /opt/secy/conf/srt-settings.json \
+    /opt/secy/entrypoint.sh \
+    /opt/secy/secy.sh \
+    /opt/secy/watch.sh \
+    /opt/secy/patrol.sh \
+    /opt/secy/c2.sh \
+    /opt/secy/lib/secy-common.sh \
+    /opt/secy/lib/agent-common.sh \
+    /opt/secy/lib/c2-common.sh \
+    /opt/secy/lib/patrol-common.sh \
+    /opt/secy/lib/watch-common.sh \
+    /opt/secy/lib/inotify-watch.sh \
+    /opt/secy/lib/format-stream.sh \
+    /usr/local/lib/sread/conf/blocked_paths \
+    /usr/local/lib/sread/conf/redact_patterns \
+    /usr/local/lib/sread/conf/allowed_mimetypes \
+    /usr/local/lib/sread/lib/common.sh \
+    /usr/local/lib/sread/lib/blocklist.sh \
+    /usr/local/lib/sread/lib/redact.sh \
+    /usr/local/bin/sread \
+    > /opt/secy/integrity.sha256
+
 # State directory — mount a volume here for persistent findings
 RUN mkdir -p /var/lib/secy/state
 

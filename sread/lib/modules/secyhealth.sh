@@ -1,11 +1,31 @@
-# Check secy notification infrastructure: systemd service and cron health check
+# Check secy infrastructure: integrity verification, notification service, cron health check
 # Usage: sread secyhealth
 
 run() {
     local root=""
     [[ -d "/host/home" ]] && root="/host"
 
-    section_header "SECY NOTIFICATION HEALTH"
+    section_header "SECY INFRASTRUCTURE HEALTH"
+
+    # ── 0. Container integrity ────────────────────────────────────
+    echo "--- Container integrity ---"
+    local integrity_issues=0
+    local manifest="/opt/secy/integrity.sha256"
+
+    if [[ -f "$manifest" ]]; then
+        if sha256sum --check --strict "$manifest" > /dev/null 2>&1; then
+            echo "  Integrity manifest: verified (all files match)"
+        else
+            echo "  [!] INTEGRITY CHECK FAILED — files modified since build:"
+            sha256sum --check "$manifest" 2>&1 | grep -v ': OK$' | sed 's/^/  /'
+            integrity_issues=$((integrity_issues + 1))
+        fi
+    else
+        echo "  [!] Integrity manifest: NOT FOUND at ${manifest}"
+        echo "      Image may have been built without integrity support"
+        integrity_issues=$((integrity_issues + 1))
+    fi
+    echo ""
 
     # Discover the user's home directory
     local user_home=""
@@ -55,7 +75,7 @@ run() {
             service_issues=$((service_issues + 1))
         fi
     else
-        echo "  [!] Unit file: NOT FOUND at ${service_file#${root}}"
+        echo "  [!] Unit file: NOT FOUND at ${service_file#"${root}"}"
         echo "      Run: ./scripts/setup-notify.sh"
         service_issues=$((service_issues + 1))
     fi
@@ -115,7 +135,7 @@ run() {
         perms="$(stat -c%a "$issues_dir" 2>/dev/null || echo "?")"
         local issue_count
         issue_count="$(find "$issues_dir" -maxdepth 1 -name '*.md' -type f 2>/dev/null | wc -l)"
-        echo "  Path: ${issues_dir#${root}}"
+        echo "  Path: ${issues_dir#"${root}"}"
         echo "  Owner: ${owner}, mode: ${perms}"
         echo "  Issues on file: ${issue_count}"
 
@@ -123,7 +143,7 @@ run() {
             echo "  [!] Owned by root — notify.sh may not be able to read new files"
         fi
     elif [[ -n "$issues_dir" ]]; then
-        echo "  [!] Issues directory not found: ${issues_dir#${root}}"
+        echo "  [!] Issues directory not found: ${issues_dir#"${root}"}"
     else
         echo "  (could not determine issues directory path)"
     fi
@@ -131,16 +151,17 @@ run() {
 
     # ── Summary ────────────────────────────────────────────────────
     echo "--- Summary ---"
+    echo "  Integrity issues: ${integrity_issues}"
     echo "  Service issues: ${service_issues}"
     echo "  Cron issues: ${cron_issues}"
 
-    local total=$((service_issues + cron_issues))
+    local total=$((integrity_issues + service_issues + cron_issues))
     if [[ $total -eq 0 ]]; then
-        echo "  Notification infrastructure: OK"
+        echo "  secy infrastructure: OK"
     else
-        echo "  [!] Notification infrastructure: DEGRADED (${total} issue(s))"
+        echo "  [!] secy infrastructure: DEGRADED (${total} issue(s))"
     fi
 
     echo ""
-    log_ok "Notification health check complete (service_issues: ${service_issues}, cron_issues: ${cron_issues})"
+    log_ok "Health check complete (integrity: ${integrity_issues}, service: ${service_issues}, cron: ${cron_issues})"
 }
