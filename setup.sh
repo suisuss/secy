@@ -451,9 +451,15 @@ _verify_image_digest() {
         warn "  Current:  ${current:0:20}..."
         warn "  If you rebuilt intentionally, run: ./setup.sh install"
         echo ""
-        read -rp "Continue anyway? [y/N] " answer
-        if ! [[ "$answer" =~ ^[Yy]$ ]]; then
-            error "Aborted. Run ./setup.sh install to update the stored digest."
+        if [[ -t 0 ]]; then
+            read -rp "Continue anyway? [y/N] " answer
+            if ! [[ "$answer" =~ ^[Yy]$ ]]; then
+                error "Aborted. Run ./setup.sh install to update the stored digest."
+                exit 1
+            fi
+        else
+            error "Image digest mismatch in non-interactive mode. Aborting."
+            error "Run ./setup.sh install to update the stored digest."
             exit 1
         fi
     fi
