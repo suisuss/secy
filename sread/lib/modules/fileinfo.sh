@@ -171,8 +171,8 @@ run() {
                 echo "  lines: ${line_count}"
                 local first_line
                 first_line="$(head -1 "$target" 2>/dev/null)" || first_line=""
-                if [[ "$first_line" == "#!"* ]]; then
-                    echo "  shebang: ${first_line}"
+                if [[ "$first_line" =~ ^#![[:space:]]*(/[a-zA-Z0-9/_.-]+) ]]; then
+                    echo "  shebang: ${BASH_REMATCH[1]}"
                 fi
                 # File size categories for text
                 local size
