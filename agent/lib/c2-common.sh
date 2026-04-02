@@ -435,7 +435,11 @@ ${context}
 7. Output SECY_COMPLETE when done
 "
 
+    # C2 uses its own model (structured correlation — lighter model suffices)
+    local _saved_model="$CLAUDE_MODEL"
+    CLAUDE_MODEL="${CLAUDE_MODEL_C2:-$CLAUDE_MODEL}"
     invoke_claude "$system_prompt" "$prompt" "$C2_REVIEW_BUDGET_USD" > /dev/null
+    CLAUDE_MODEL="$_saved_model"
 
     # Mark all triggering findings as processed
     for filename in "${findings_ref[@]}"; do
