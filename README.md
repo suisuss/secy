@@ -2,6 +2,17 @@
 
 An autonomous AI security monitor that continuously watches your Linux system for threats. Four containerized services — watch, patrol, C2, and one-shot audit — read the host filesystem, detect anomalies, correlate findings across services, and report actionable issues to the user. Runs inside sandboxed Docker containers with read-only host access.
 
+### Target system
+
+secy is built for **developer workstations** running:
+
+- **Debian 12 (bookworm)** on **x86_64/amd64**
+- **GNOME desktop** (X11 or Wayland) — required for desktop notifications
+- **systemd** — user services for the notification watcher
+- **Docker Engine** with Compose v2
+
+It is not designed for headless servers, non-Debian distributions, or ARM architectures. Patrol modules parse Debian-specific paths (`/var/lib/dpkg`, apt logs), sread uses Debian package verification (`debsums`), and the notification system depends on a graphical session with `notify-send` and D-Bus.
+
 ## How it works
 
 ```
