@@ -285,14 +285,19 @@ ${file_details}
 
 ### Instructions
 
-1. Read each file's metadata above carefully
-2. If you need more information, use \`sread fileinfo <path>\` or \`sread hash <path>\`
-3. For text-like files, you may use the Read tool to inspect content directly
-4. Write your triage report to: ${findings_file}
-5. Output SECY_COMPLETE when done
+1. Assess each file based on the metadata above — all available information is already provided
+2. Do NOT read file content or run commands — triage from the metadata only
+3. Write your triage report to: ${findings_file}
+4. Output SECY_COMPLETE when done
 "
 
+    # Watch uses Write-only tool set. All metadata is pre-extracted by sread
+    # and included in the prompt. No read/execute tools = no prompt injection
+    # vector from untrusted file content.
+    local _saved_tools="$ALLOWED_TOOLS"
+    ALLOWED_TOOLS="Write"
     invoke_claude "$system_prompt" "$prompt" "$MAX_BUDGET_USD" > /dev/null
+    ALLOWED_TOOLS="$_saved_tools"
 
     if [[ -f "$findings_file" ]]; then
         secy_log "watch" "Triage report written: ${findings_file}"

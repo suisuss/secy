@@ -155,16 +155,35 @@ run() {
                 _archive_info "$target" "$mime"
                 ;;
             application/vnd.ms-*)
-                # Office documents (legacy format)
-                _strings_preview "$target"
+                # Office documents (legacy format) — check for VBA macros indicator
+                echo "--- office metadata ---"
+                if strings "$target" 2>/dev/null | grep -q "vbaProject"; then
+                    echo "  [!] VBA macro project detected"
+                else
+                    echo "  no VBA macros detected"
+                fi
                 ;;
             text/*|application/json|application/xml|application/javascript)
-                # Text-like: show first 20 lines
-                echo "--- content preview (first 20 lines) ---"
-                head -20 "$target" 2>/dev/null | sed 's/^/  /'
+                # Text-like: line count and shebang only (no content — prompt injection risk)
+                echo "--- text metadata ---"
+                local line_count
+                line_count="$(wc -l < "$target" 2>/dev/null || echo "?")"
+                echo "  lines: ${line_count}"
+                local first_line
+                first_line="$(head -1 "$target" 2>/dev/null)" || first_line=""
+                if [[ "$first_line" =~ ^#![[:space:]]*(/[a-zA-Z0-9/_.-]+) ]]; then
+                    echo "  shebang: ${BASH_REMATCH[1]}"
+                fi
+                # File size categories for text
+                local size
+                size="$(stat -c%s "$target" 2>/dev/null || echo 0)"
+                if [[ "$size" -gt 1048576 ]]; then
+                    echo "  note: large text file (>1MB) — unusual for scripts"
+                fi
                 ;;
             *)
-                _strings_preview "$target"
+                # Unknown type — report magic only, no content extraction
+                echo "  (no type-specific analysis available)"
                 ;;
         esac
 
