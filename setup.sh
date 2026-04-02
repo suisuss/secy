@@ -177,6 +177,8 @@ do_install() {
     info "This may take a few minutes on first build..."
     docker compose -f "${SECY_DIR}/docker-compose.yml" build
 
+    # Store image digest for later verification
+    _save_image_digest
     info "Image built successfully"
 
     # ── 4. Start daemon services ──────────────────────────────────
@@ -274,6 +276,9 @@ do_start() {
         error "secy image not found. Run ./setup.sh install first."
         exit 1
     fi
+
+    # Verify image hasn't been replaced since install
+    _verify_image_digest
 
     _start_containers
 
@@ -380,6 +385,24 @@ do_status() {
         warn "  data directory not found — run ./setup.sh install"
     fi
 
+    # ── Integrity ─────────────────────────────────────────────────
+    echo ""
+    echo -e "${BOLD}Integrity:${RESET}"
+    if [[ -f "${SECY_DATA_DIR}/.image-digest" ]]; then
+        local saved current
+        saved="$(cat "${SECY_DATA_DIR}/.image-digest")"
+        current="$(docker inspect secy --format '{{.Id}}' 2>/dev/null)" || current=""
+        if [[ -n "$current" ]] && [[ "$saved" == "$current" ]]; then
+            info "  Image digest: verified"
+        elif [[ -n "$current" ]]; then
+            error "  Image digest: MISMATCH (rebuilt or tampered since install)"
+        else
+            warn "  Image digest: saved but image not found"
+        fi
+    else
+        warn "  Image digest: not saved (run ./setup.sh install)"
+    fi
+
     # ── Auth ──────────────────────────────────────────────────────
     echo ""
     echo -e "${BOLD}Auth:${RESET}"
@@ -403,6 +426,37 @@ _start_containers() {
     info "Starting watch, patrol, and c2 services..."
     docker compose -f "${SECY_DIR}/docker-compose.yml" up -d secy-watch secy-patrol secy-c2
     info "Containers started"
+}
+
+DIGEST_FILE="${SECY_DATA_DIR}/.image-digest"
+
+_save_image_digest() {
+    local digest
+    digest="$(docker inspect secy --format '{{.Id}}' 2>/dev/null)" || return 0
+    mkdir -p "$(dirname "$DIGEST_FILE")"
+    echo "$digest" > "$DIGEST_FILE"
+    info "Image digest saved"
+}
+
+_verify_image_digest() {
+    [[ -f "$DIGEST_FILE" ]] || return 0
+
+    local saved current
+    saved="$(cat "$DIGEST_FILE")"
+    current="$(docker inspect secy --format '{{.Id}}' 2>/dev/null)" || return 0
+
+    if [[ "$saved" != "$current" ]]; then
+        warn "Image digest mismatch — image was rebuilt or replaced since install"
+        warn "  Expected: ${saved:0:20}..."
+        warn "  Current:  ${current:0:20}..."
+        warn "  If you rebuilt intentionally, run: ./setup.sh install"
+        echo ""
+        read -rp "Continue anyway? [y/N] " answer
+        if ! [[ "$answer" =~ ^[Yy]$ ]]; then
+            error "Aborted. Run ./setup.sh install to update the stored digest."
+            exit 1
+        fi
+    fi
 }
 
 _check_containers() {
