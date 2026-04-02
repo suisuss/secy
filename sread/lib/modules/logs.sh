@@ -19,12 +19,16 @@ run() {
 
     require_root
 
+    # Resolve host filesystem path (container vs bare-metal)
+    local root=""
+    [[ -d "/host/etc" ]] && root="/host"
+
     section_header "LOGS: ${log_type} (last ${lines} lines)"
 
     case "$log_type" in
         auth)
-            if [[ -f /var/log/auth.log ]]; then
-                tail -n "$lines" /var/log/auth.log 2>/dev/null | redact_output
+            if [[ -f "${root}/var/log/auth.log" ]]; then
+                tail -n "$lines" "${root}/var/log/auth.log" 2>/dev/null | redact_output
             elif command -v journalctl &>/dev/null; then
                 journalctl -u ssh -u sshd --no-pager -n "$lines" 2>/dev/null | redact_output
             else
@@ -32,8 +36,8 @@ run() {
             fi
             ;;
         syslog)
-            if [[ -f /var/log/syslog ]]; then
-                tail -n "$lines" /var/log/syslog 2>/dev/null | redact_output
+            if [[ -f "${root}/var/log/syslog" ]]; then
+                tail -n "$lines" "${root}/var/log/syslog" 2>/dev/null | redact_output
             elif command -v journalctl &>/dev/null; then
                 journalctl --no-pager -n "$lines" 2>/dev/null | redact_output
             else
@@ -48,8 +52,8 @@ run() {
             fi
             ;;
         kern)
-            if [[ -f /var/log/kern.log ]]; then
-                tail -n "$lines" /var/log/kern.log 2>/dev/null | redact_output
+            if [[ -f "${root}/var/log/kern.log" ]]; then
+                tail -n "$lines" "${root}/var/log/kern.log" 2>/dev/null | redact_output
             elif command -v journalctl &>/dev/null; then
                 journalctl -k --no-pager -n "$lines" 2>/dev/null | redact_output
             else

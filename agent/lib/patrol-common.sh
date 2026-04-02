@@ -45,7 +45,10 @@ proctree       300               high
 mountsec       3600              medium
 secyhealth     1800              high
 desktop        1800              low
-surveil        1800              low"
+surveil        1800              low
+authlog        600               high
+dpkglog        3600              medium
+kernlog        600               high"
 
 # ── State directory management ───────────────────────────────────
 

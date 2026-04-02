@@ -115,7 +115,7 @@ Techniques for finding sophisticatedly hidden malicious programs on a Linux syst
 | 7.5 | Package integrity verification (debsums -c / rpm -Va) | **Y** | `sread pkgverify` | Verifies md5sums for critical packages; --all for full scan |
 | 7.6 | Offline / external analysis (boot from trusted media) | **N** | — | Out of scope for a running-system tool; noted for completeness |
 | 7.7 | YARA / content-based signature scanning | **N** | — | Pattern match on file content (strings, hex, regex, structure); catches malware variants/families, not just exact hashes; community rulesets (Florian Roth signature-base, YARA-Rules) |
-| 7.8 | Structured log parsing and correlation | **N** | — | Parse syslog, auth.log, dpkg.log, journal with field extraction; correlate events across sources into attack chains; currently agent reads auth.log tail ad-hoc |
+| 7.8 | Structured log parsing and correlation | **P** | `sread authlog`, `sread dpkglog`, `sread kernlog` | Field extraction and aggregation for auth, package, and kernel logs; brute-force-then-success correlation in authlog; cross-source correlation deferred to Claude review of patrol diffs |
 | 7.9 | Dynamic analysis / sandboxed execution | **N** | — | Execute suspicious files in isolated environment, monitor syscalls/network/filesystem changes (Cuckoo/Cape); out of scope for read-only container |
 
 ## 8. Operational capabilities
@@ -190,7 +190,7 @@ Could be added within the current architecture (read-only container, build-time 
 | 3.12 | Full filesystem hash DB | Generate hash DB on baseline run; diff on subsequent runs; extends existing baseline mode |
 | 5.10 | C2 IP reputation | Bake Feodo Tracker / abuse.ch IP blocklist at build time (same pattern as malware hash DB); check in netconn module |
 | 7.7 | YARA scanning | Install YARA + community rulesets in Docker image; run as fast pre-filter before Claude triage in watch mode |
-| 7.8 | Structured log parsing | Add sread modules for dpkg.log, apt history, syslog, journal; field extraction + correlation rules |
+| 7.8 | Structured log parsing | Extend: application-specific logs (apache, nginx); journalctl structured fields when running bare-metal; full cross-source attack chain reconstruction |
 | 8.2 | Alerting / notification | Write hook in secy-common.sh; curl webhook or notify-send on CRITICAL findings; minimal implementation |
 | 8.4 | Automatic DB updates | Download hash DB / YARA rules to state volume on startup or periodic refresh; avoids full rebuild |
 
