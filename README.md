@@ -1,6 +1,6 @@
-# secy — Autonomous Security Monitor for Linux
+# secy — Autonomous Security Monitor for Developer Laptops
 
-An autonomous AI security monitor that continuously watches your Linux system for threats. Four containerized services — watch, patrol, C2, and one-shot audit — read the host filesystem, detect anomalies, correlate findings across services, and report actionable issues to the user. Runs inside sandboxed Docker containers with read-only host access.
+An autonomous AI security monitor for developer workstations. Watches for supply chain attacks, malware downloads, and system anomalies — then raises issues for the developer to investigate. Runs inside sandboxed Docker containers with read-only host access. No commands are executed on the host.
 
 ### Target system
 
