@@ -37,7 +37,7 @@ run() {
         for f in /etc/sudoers.d/*; do
             [[ -f "$f" ]] || continue
             echo "  --- $(basename "$f") ---"
-            grep -v '^\s*#\|^\s*$' "$f" 2>/dev/null | redact_output | sed 's/^/    /'
+            { grep -v '^\s*#\|^\s*$' "$f" 2>/dev/null || true; } | redact_output | sed 's/^/    /'
         done
     fi
     echo ""
