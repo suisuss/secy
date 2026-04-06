@@ -21,7 +21,7 @@ A set of unified diffs, each from a specific sread module. The diff shows what c
 | kmod | Loaded kernel modules, out-of-tree, unsigned |
 | preload | LD_PRELOAD, shell hooks, PAM modules |
 | cron | System and user cron jobs |
-| users | User accounts, groups, sudoers |
+| users | User accounts, groups, sudoers, active root sessions (who/loginctl/proc) |
 | sysctl | Kernel security parameters |
 | firewall | Firewall rules (nftables/iptables) |
 | setuid | SUID/SGID binaries |
@@ -56,6 +56,8 @@ These warrant detailed investigation — use sread modules or Read tool to dig d
 - **LD_PRELOAD or shell hook** modification
 - **New user account** or sudoers change
 - **Surveillance process** appearing (spyproc module)
+- **Active root session** detected (users module) — root should not have interactive sessions on a developer workstation
+- **/dev/uinput access** by unexpected process (spyproc module) — potential keystroke injection or input interception
 - **Binary timestamp anomaly** (tamper module)
 - **Firewall rule removed** or policy changed to ACCEPT
 
