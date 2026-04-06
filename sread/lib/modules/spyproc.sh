@@ -234,6 +234,48 @@ run() {
     [[ $input_readers -eq 0 ]] && echo "  (none detected — only expected display servers hold input fds)"
     echo ""
 
+    # ── /dev/uinput readers ──────────────────────────────────────────
+    # /dev/uinput allows creating virtual input devices. A process that
+    # opens it can inject keystrokes (virtual keyboard) or intercept
+    # real input by creating a clone device and grabbing the original.
+    # Legitimate uses: input remappers (keyd, interception-tools, xremap),
+    # virtual keyboard apps, and some accessibility tools.
+    echo "--- Processes with /dev/uinput fd (virtual input injection) ---"
+    local uinput_readers=0
+    local uinput_allowlist="^(keyd|interception|udevd|systemd-udevd|xremap|kanata|kmonad|evsieve|ydotool|dotool|wtype|xdotool|input-remapper|solaar|libinput)$"
+    for pid_dir in "${proc}"/[0-9]*; do
+        [[ -d "${pid_dir}/fd" ]] || continue
+        [[ -f "${pid_dir}/cmdline" ]] || continue
+
+        local has_uinput=false
+        for fd in "${pid_dir}"/fd/*; do
+            local target
+            target="$(readlink "$fd" 2>/dev/null)" || continue
+            if [[ "$target" == /dev/uinput ]]; then
+                has_uinput=true
+                break
+            fi
+        done
+
+        if $has_uinput; then
+            local pid comm
+            pid="$(basename "$pid_dir")"
+            comm="$(cat "${pid_dir}/comm" 2>/dev/null || echo "?")"
+
+            if echo "$comm" | grep -qiE "$uinput_allowlist"; then
+                continue
+            fi
+
+            local cmdline
+            cmdline="$(tr '\0' ' ' < "${pid_dir}/cmdline" 2>/dev/null || echo "?")"
+            echo "  [!] PID ${pid} (${comm}) has /dev/uinput fd open"
+            echo "      ${cmdline}"
+            uinput_readers=$((uinput_readers + 1))
+        fi
+    done
+    [[ $uinput_readers -eq 0 ]] && echo "  (none detected)"
+    echo ""
+
     # ── PID namespace anomalies ────────────────────────────────────
     # Processes in a non-default PID namespace may be hiding from
     # standard process enumeration. Container runtimes legitimately
@@ -311,5 +353,5 @@ run() {
     fi
 
     echo ""
-    log_ok "Process scan complete (found: ${found} suspicious, ${deleted} deleted-exe, ${memfd} memfd, ${spoofed} spoofed, ${traced} traced, ${injected_threads} injected-threads, ${input_readers} input readers, ${ns_anomalies} ns-anomalies)"
+    log_ok "Process scan complete (found: ${found} suspicious, ${deleted} deleted-exe, ${memfd} memfd, ${spoofed} spoofed, ${traced} traced, ${injected_threads} injected-threads, ${input_readers} input readers, ${uinput_readers} uinput readers, ${ns_anomalies} ns-anomalies)"
 }

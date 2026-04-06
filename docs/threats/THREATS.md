@@ -39,6 +39,7 @@ Techniques for finding sophisticatedly hidden malicious programs on a Linux syst
 | 2.1 | Known spyware process name matching | **Y** | `sread spyproc` | Keyloggers, screen recorders, RATs, sniffers, tracers |
 | 2.2 | Ptrace attachment detection (TracerPid) | **Y** | `sread spyproc` | Scans /proc/[pid]/status for non-zero TracerPid |
 | 2.3 | /dev/input readers (keylogger detection) | **Y** | `sread spyproc` | Checks fd symlinks; allowlists Xorg, Xwayland, libinput, mutter, gnome-shell |
+| 2.3a | /dev/uinput readers (virtual input injection) | **Y** | `sread spyproc` | Detects processes with /dev/uinput fds; allowlists keyd, kanata, kmonad, xremap, etc. |
 | 2.4 | Raw/packet socket detection | **Y** | `sread spyproc --deep` | Correlates fd inodes against /proc/net/raw and /proc/net/packet |
 | 2.5 | Deleted binary detection (/proc/[pid]/exe → "(deleted)") | **Y** | `sread spyproc` | Flags processes whose exe symlink points to a deleted file |
 | 2.6 | memfd_create execution (/proc/[pid]/exe → "/memfd:*") | **Y** | `sread spyproc` | Flags memory-only execution via memfd_create |
@@ -147,6 +148,14 @@ Not detection techniques, but infrastructure that determines whether detections 
 | 10.2 | Sudo env_keep preserving injection vars | **Y** | `sread privesc` | LD_PRELOAD, PYTHONPATH, LD_LIBRARY_PATH kept through sudo |
 | 10.3 | File capabilities on binaries | **Y** | `sread privesc` | getcap showing cap_setuid, cap_net_raw, etc. on unexpected binaries |
 | 10.4 | Polkit rule manipulation | **Y** | `sread privesc` | /etc/polkit-1/rules.d/ granting unauthorized privilege escalation |
+
+## 10a. Active root session detection
+
+| # | Technique | Covered | Where | Notes |
+|---|-----------|---------|-------|-------|
+| 10a.1 | Active root login sessions (utmp/who) | **Y** | `sread users` | Parses utmp for root entries; catches TTY and SSH logins |
+| 10a.2 | Active root sessions (loginctl) | **Y** | `sread users` | Queries systemd-logind for root sessions including graphical seats |
+| 10a.3 | Active root shells via /proc (UID 0 + controlling terminal) | **Y** | `sread users` | Scans /proc for UID 0 processes with TTY; catches su/sudo -i shells that don't create utmp entries; decodes TTY device numbers |
 
 ## 11. Display/session attacks
 

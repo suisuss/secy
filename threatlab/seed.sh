@@ -228,6 +228,12 @@ cp /usr/bin/bash /tmp/npm-fake
 # setsid creates a new session, detaching from terminal
 setsid /usr/bin/sleep 86400 &
 
+# ROOT-1 — Root shell with controlling terminal (simulates su/sudo -i)
+# Uses script(1) to allocate a pty, making the sleep process appear as
+# a UID 0 process with a controlling terminal — exactly what sread users
+# checks for.
+script -qfc "sleep 86400" /dev/null &
+
 echo "[seed] Background processes started."
 
 # ── Readiness sentinel ────────────────────────────────────────────────

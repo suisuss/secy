@@ -150,6 +150,14 @@ assert "PT-2" "Session leader no terminal"    proctree "session leader, no termi
 echo ""
 
 # ══════════════════════════════════════════════════════════════════════
+# USERS MODULE
+# ══════════════════════════════════════════════════════════════════════
+echo "── users ──────────────────────────────────────────────────────"
+assert "RS-1" "Active root shell (UID 0 + TTY)" users "root.*(interactive shell|process).*pts/"
+skip  "RS-2" "/dev/uinput reader detection"     "requires /dev/uinput device node"
+echo ""
+
+# ══════════════════════════════════════════════════════════════════════
 # MOUNTSEC MODULE
 # ══════════════════════════════════════════════════════════════════════
 echo "── mountsec ──────────────────────────────────────────────────"
