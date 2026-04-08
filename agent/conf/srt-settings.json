@@ -3,7 +3,8 @@
 
   "network": {
     "allowedDomains": [
-      "api.anthropic.com"
+      "api.anthropic.com",
+      "security-tracker.debian.org"
     ],
     "deniedDomains": []
   },

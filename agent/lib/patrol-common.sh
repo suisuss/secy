@@ -48,7 +48,8 @@ desktop        1800              low
 surveil        1800              low
 authlog        600               high
 dpkglog        3600              medium
-kernlog        600               high"
+kernlog        600               high
+debsecan       21600             medium"
 
 # ── State directory management ───────────────────────────────────
 

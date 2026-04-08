@@ -158,6 +158,23 @@ skip  "RS-2" "/dev/uinput reader detection"     "requires /dev/uinput device nod
 echo ""
 
 # ══════════════════════════════════════════════════════════════════════
+# DEBSECAN MODULE
+# ══════════════════════════════════════════════════════════════════════
+echo "── debsecan ──────────────────────────────────────────────────"
+# debsecan needs to fetch the CVE list from security-tracker.debian.org.
+# The test container has network access; if the fetch fails (offline CI)
+# the module still emits the section header and a debsecan warning, which
+# we tolerate by asserting only on the headers it always prints.
+assert "DS-1" "Module runs and emits section header"  debsecan "DEBSECAN CVE ANALYSIS"
+assert "DS-2" "Module reports source line"            debsecan "status file:.*dpkg/status"
+# Summary appears only when debsecan ran successfully against the dpkg
+# status file. If the invocation flags are wrong, this fails — catching
+# the kind of regression where the module silently degrades to "no CVEs".
+assert "DS-3" "debsecan invocation succeeds (Summary block)"  debsecan "Summary ---"
+assert "DS-4" "Reports a non-zero CVE total"          debsecan "total:[[:space:]]+[1-9]"
+echo ""
+
+# ══════════════════════════════════════════════════════════════════════
 # MOUNTSEC MODULE
 # ══════════════════════════════════════════════════════════════════════
 echo "── mountsec ──────────────────────────────────────────────────"

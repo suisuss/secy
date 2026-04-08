@@ -33,6 +33,7 @@ A set of unified diffs, each from a specific sread module. The diff shows what c
 | netconn | Established network connections |
 | desktop | Remote desktop, screen sharing, browser extensions |
 | surveil | Combined surveillance detection |
+| debsecan | Known CVEs in installed Debian packages (high/medium with fix available) |
 
 ## Analysis Methodology
 
@@ -60,6 +61,7 @@ These warrant detailed investigation — use sread modules or Read tool to dig d
 - **/dev/uinput access** by unexpected process (spyproc module) — potential keystroke injection or input interception
 - **Binary timestamp anomaly** (tamper module)
 - **Firewall rule removed** or policy changed to ACCEPT
+- **New high-severity CVE** appearing in `debsecan` output, especially affecting packages tied to listening services (cross-check with `ports` / `services`)
 
 ## Findings Format
 
